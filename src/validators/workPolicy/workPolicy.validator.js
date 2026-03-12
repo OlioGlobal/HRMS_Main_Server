@@ -57,6 +57,43 @@ const sharedRules = [
   body('isDefault')
     .optional()
     .isBoolean().withMessage('isDefault must be true or false.'),
+
+  // ─── Overtime & Late Payroll Rules ──────────────────────────────────────────
+  body('overtimeEnabled')
+    .optional()
+    .isBoolean().withMessage('overtimeEnabled must be true or false.'),
+
+  body('overtimeCompensationType')
+    .optional()
+    .isIn(['pay', 'comp_off', 'both']).withMessage('Must be pay, comp_off, or both.'),
+
+  body('overtimeRateMultiplier')
+    .optional()
+    .isFloat({ min: 0.5, max: 5 }).withMessage('OT rate multiplier must be 0.5–5.'),
+
+  body('overtimeMinHours')
+    .optional()
+    .isFloat({ min: 0, max: 8 }).withMessage('OT minimum hours must be 0–8.'),
+
+  body('lateDeductionEnabled')
+    .optional()
+    .isBoolean().withMessage('lateDeductionEnabled must be true or false.'),
+
+  body('lateDeductionType')
+    .optional()
+    .isIn(['none', 'per_occurrence', 'salary_based']).withMessage('Must be none, per_occurrence, or salary_based.'),
+
+  body('lateDeductionAmount')
+    .optional()
+    .isFloat({ min: 0 }).withMessage('Late deduction amount must be >= 0.'),
+
+  body('lateDeductionAfterCount')
+    .optional()
+    .isInt({ min: 0, max: 31 }).withMessage('Late free passes must be 0–31.'),
+
+  body('ignoreLatIfHoursCompleted')
+    .optional()
+    .isBoolean().withMessage('ignoreLatIfHoursCompleted must be true or false.'),
 ];
 
 // ─── Create — name and location_id required ───────────────────────────────────

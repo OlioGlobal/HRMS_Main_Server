@@ -42,6 +42,18 @@ const workPolicySchema = new mongoose.Schema(
     absentThresholdHours:   { type: Number, default: 2   },  // worked < X hrs = absent
     overtimeThresholdHours: { type: Number, default: 8   },  // worked > X hrs = overtime begins
 
+    // ─── Overtime & Late Payroll Rules ────────────────────────────────────────────
+    overtimeEnabled:            { type: Boolean, default: false },
+    overtimeCompensationType:   { type: String,  enum: ['pay', 'comp_off', 'both'], default: 'pay' },
+    overtimeRateMultiplier:     { type: Number,  default: 1.0 },     // 1.0, 1.5, 2.0
+    overtimeMinHours:           { type: Number,  default: 1.0 },     // minimum OT hours to qualify
+
+    lateDeductionEnabled:       { type: Boolean, default: false },
+    lateDeductionType:          { type: String,  enum: ['none', 'per_occurrence', 'salary_based'], default: 'none' },
+    lateDeductionAmount:        { type: Number,  default: 0 },       // flat amount per occurrence
+    lateDeductionAfterCount:    { type: Number,  default: 0 },       // free passes per month
+    ignoreLatIfHoursCompleted:  { type: Boolean, default: false },   // skip late deduction if full hours worked
+
     isDefault: { type: Boolean, default: false },   // one default policy per company
     isActive:  { type: Boolean, default: true  },
   },

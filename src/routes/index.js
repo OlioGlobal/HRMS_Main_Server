@@ -15,6 +15,7 @@ const designationRoutes = require('./designation/designation.routes');
 const holidayRoutes     = require('./holiday/holiday.routes');
 const leaveRoutes       = require('./leave/leave.routes');
 const attendanceRoutes  = require('./attendance/attendance.routes');
+const payrollRoutes     = require('./payroll/payroll.routes');
 
 // ─── Mount All Routes ──────────────────────────────────────────────────────────
 router.use('/auth',          authRoutes);
@@ -31,5 +32,6 @@ router.use('/designations',  designationRoutes);
 router.use('/holidays',      holidayRoutes);
 router.use('/leave',         leaveRoutes);
 router.use('/attendance',    attendanceRoutes);
+router.use('/payroll',       payrollRoutes);
 
 module.exports = router;
