@@ -145,24 +145,30 @@ const PERMISSIONS = [
   { module: 'payslips', action: 'view',   description: 'View payslips' },
   { module: 'payslips', action: 'export', description: 'Download or export payslips' },
 
-  // Appraisals
-  { module: 'appraisals', action: 'view',    description: 'View appraisal cycles and ratings' },
-  { module: 'appraisals', action: 'create',  description: 'Create appraisal cycle' },
-  { module: 'appraisals', action: 'update',  description: 'Update appraisal ratings and comments' },
-  { module: 'appraisals', action: 'delete',  description: 'Delete appraisal cycle' },
-  { module: 'appraisals', action: 'approve', description: 'Approve and finalize appraisal' },
+  // Appraisal Cycles
+  { module: 'appraisal_cycles', action: 'view',   description: 'View appraisal cycles' },
+  { module: 'appraisal_cycles', action: 'create', description: 'Create appraisal cycle' },
+  { module: 'appraisal_cycles', action: 'update', description: 'Update appraisal cycle' },
+  { module: 'appraisal_cycles', action: 'delete', description: 'Delete appraisal cycle' },
 
-  // KRA (Key Result Areas)
-  { module: 'kra', action: 'view',   description: 'View KRAs' },
-  { module: 'kra', action: 'create', description: 'Define KRA' },
-  { module: 'kra', action: 'update', description: 'Update KRA' },
-  { module: 'kra', action: 'delete', description: 'Delete KRA' },
+  // Appraisal Records
+  { module: 'appraisal_records', action: 'view',     description: 'View appraisal records' },
+  { module: 'appraisal_records', action: 'update',   description: 'Update appraisal record' },
+  { module: 'appraisal_records', action: 'finalize', description: 'Finalize appraisal record' },
+  { module: 'appraisal_records', action: 'export',   description: 'Export appraisal data' },
 
-  // Goals
-  { module: 'goals', action: 'view',   description: 'View goals' },
-  { module: 'goals', action: 'create', description: 'Create goal' },
-  { module: 'goals', action: 'update', description: 'Update goal progress' },
-  { module: 'goals', action: 'delete', description: 'Delete goal' },
+  // Appraisal Goals
+  { module: 'appraisal_goals', action: 'view',    description: 'View appraisal goals' },
+  { module: 'appraisal_goals', action: 'create',  description: 'Create appraisal goal' },
+  { module: 'appraisal_goals', action: 'update',  description: 'Update appraisal goal' },
+  { module: 'appraisal_goals', action: 'approve', description: 'Approve appraisal goals' },
+  { module: 'appraisal_goals', action: 'delete',  description: 'Delete appraisal goal' },
+
+  // Appraisal Templates
+  { module: 'appraisal_templates', action: 'view',   description: 'View appraisal templates' },
+  { module: 'appraisal_templates', action: 'create', description: 'Create appraisal template' },
+  { module: 'appraisal_templates', action: 'update', description: 'Update appraisal template' },
+  { module: 'appraisal_templates', action: 'delete', description: 'Delete appraisal template' },
 
   // Documents
   { module: 'documents', action: 'view',   description: 'View documents' },

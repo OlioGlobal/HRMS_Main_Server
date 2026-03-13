@@ -16,9 +16,11 @@ const getWorkingDaysInMonth = async (month, year, workingDays, locationId, compa
   const holidays = await PublicHoliday.find({
     company_id: companyId,
     date: { $gte: monthStart, $lte: monthEnd },
+    isActive: true,
+    isOptional: false,
     $or: [
-      { isCompanyWide: true },
-      { locations: locationId },
+      { location_id: null },
+      ...(locationId ? [{ location_id: locationId }] : []),
     ],
   }).lean();
 
@@ -91,11 +93,16 @@ const getWorkingDaysTo = async (toDate, month, year, workingDays, locationId, co
 
 /**
  * Get LWP days for an employee in a given month.
- * Returns the count of approved LWP leave days that fall in this month.
+ * Only counts working days (excludes weekends + holidays).
  */
-const getLWPDays = async (employeeId, month, year) => {
+const getLWPDays = async (employeeId, month, year, workingDays, locationId, companyId) => {
   const monthStart = new Date(Date.UTC(year, month - 1, 1));
   const monthEnd   = new Date(Date.UTC(year, month, 0, 23, 59, 59, 999));
+
+  // Get holiday + weekend sets for filtering
+  const { holidayDates } = workingDays
+    ? await getWorkingDaysInMonth(month, year, workingDays, locationId, companyId)
+    : { holidayDates: new Set() };
 
   const lwpRequests = await LeaveRequest.find({
     employee_id: employeeId,
@@ -113,8 +120,12 @@ const getLWPDays = async (employeeId, month, year) => {
     const start = new Date(Math.max(new Date(req.startDate).getTime(), monthStart.getTime()));
     const end   = new Date(Math.min(new Date(req.endDate).getTime(), monthEnd.getTime()));
 
-    // Count days in range
     for (let d = new Date(start); d <= end; d.setUTCDate(d.getUTCDate() + 1)) {
+      const dateStr = d.toISOString().slice(0, 10);
+      const dayName = DAY_MAP[d.getUTCDay()];
+      // Skip weekends and holidays — only count working days
+      if (workingDays && !workingDays.includes(dayName)) continue;
+      if (holidayDates.has(dateStr)) continue;
       lwpDays += req.isHalfDay ? 0.5 : 1;
     }
   }
@@ -124,10 +135,15 @@ const getLWPDays = async (employeeId, month, year) => {
 
 /**
  * Get paid leave days (approved, non-LWP) for an employee in a given month.
+ * Only counts working days (excludes weekends + holidays).
  */
-const getPaidLeaveDays = async (employeeId, month, year) => {
+const getPaidLeaveDays = async (employeeId, month, year, workingDays, locationId, companyId) => {
   const monthStart = new Date(Date.UTC(year, month - 1, 1));
   const monthEnd   = new Date(Date.UTC(year, month, 0, 23, 59, 59, 999));
+
+  const { holidayDates } = workingDays
+    ? await getWorkingDaysInMonth(month, year, workingDays, locationId, companyId)
+    : { holidayDates: new Set() };
 
   const requests = await LeaveRequest.find({
     employee_id: employeeId,
@@ -146,11 +162,11 @@ const getPaidLeaveDays = async (employeeId, month, year) => {
     const end   = new Date(Math.min(new Date(req.endDate).getTime(), monthEnd.getTime()));
 
     for (let d = new Date(start); d <= end; d.setUTCDate(d.getUTCDate() + 1)) {
-      if (req.isHalfDay) {
-        paidDays += 0.5;
-      } else {
-        paidDays += 1;
-      }
+      const dateStr = d.toISOString().slice(0, 10);
+      const dayName = DAY_MAP[d.getUTCDay()];
+      if (workingDays && !workingDays.includes(dayName)) continue;
+      if (holidayDates.has(dateStr)) continue;
+      paidDays += req.isHalfDay ? 0.5 : 1;
     }
   }
 
@@ -170,10 +186,9 @@ const getAttendanceSummary = async (employeeId, month, year, workPolicy) => {
     date: { $gte: monthStart, $lte: monthEnd },
   }).lean();
 
-  // Get LWP dates for dedup
-  const lwpRequests = await LeaveRequest.find({
+  // Get all approved leave requests for dedup
+  const allLeaveRequests = await LeaveRequest.find({
     employee_id: employeeId,
-    isLWP: true,
     status: 'approved',
     $or: [
       { startDate: { $gte: monthStart, $lte: monthEnd } },
@@ -183,11 +198,22 @@ const getAttendanceSummary = async (employeeId, month, year, workPolicy) => {
   }).lean();
 
   const lwpDateSet = new Set();
-  for (const req of lwpRequests) {
+  const lwpHalfDayLeaveSet = new Set();
+  const paidHalfDayLeaveSet = new Set();
+
+  for (const req of allLeaveRequests) {
     const start = new Date(Math.max(new Date(req.startDate).getTime(), monthStart.getTime()));
     const end   = new Date(Math.min(new Date(req.endDate).getTime(), monthEnd.getTime()));
     for (let d = new Date(start); d <= end; d.setUTCDate(d.getUTCDate() + 1)) {
-      lwpDateSet.add(d.toISOString().slice(0, 10));
+      const dateStr = d.toISOString().slice(0, 10);
+      if (req.isLWP) {
+        lwpDateSet.add(dateStr);
+        if (req.isHalfDay) lwpHalfDayLeaveSet.add(dateStr);
+      }
+      // Track paid half-day leaves (half_day attendance + paid half-day leave = full day)
+      if (!req.isLWP && req.isHalfDay) {
+        paidHalfDayLeaveSet.add(dateStr);
+      }
     }
   }
 
@@ -218,7 +244,15 @@ const getAttendanceSummary = async (employeeId, month, year, workPolicy) => {
         daysWorked++;
         break;
       case 'half_day':
-        halfDays++;
+        // If there's a paid half-day leave covering the other half → count as full day worked
+        if (paidHalfDayLeaveSet.has(dateStr)) {
+          daysWorked++;
+        } else if (lwpHalfDayLeaveSet.has(dateStr)) {
+          // Half-day LWP covers the other half → count as worked (LWP deduction applied separately)
+          daysWorked++;
+        } else {
+          halfDays++;
+        }
         break;
       case 'absent':
         daysAbsent++;

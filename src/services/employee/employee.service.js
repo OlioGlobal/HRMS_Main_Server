@@ -84,7 +84,7 @@ const listEmployees = async (companyId, filters = {}, scope = 'global', requesti
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit)
-      .lean(),
+      .lean({ virtuals: true }),
     Employee.countDocuments(query),
   ]);
 
@@ -100,7 +100,7 @@ const getEmployee = async (companyId, id) => {
     .populate('workPolicy_id',       'name shiftType')
     .populate('designation_id',      'name level')
     .populate('reportingManager_id', 'firstName lastName employeeId avatar designation_id')
-    .lean();
+    .lean({ virtuals: true });
 
   if (!employee) throw new AppError('Employee not found.', 404);
   return employee;
@@ -124,7 +124,7 @@ const createEmployee = async (companyId, body, requestingUserId) => {
     phone:         body.phone         || null,
     dateOfBirth:   body.dateOfBirth   || null,
     gender:        body.gender        || null,
-    address:       body.address       || {},
+    addresses:     body.addresses     || [],
     emergencyContact: body.emergencyContact || {},
     joiningDate:   body.joiningDate,
     employmentType: body.employmentType || 'full_time',
@@ -146,13 +146,16 @@ const createEmployee = async (companyId, body, requestingUserId) => {
   const company = await Company.findById(companyId).select('settings').lean();
   const probDays = body.probationDays != null ? Number(body.probationDays) : (company?.settings?.defaultProbationDays ?? 90);
 
-  employeeData.probationDays    = probDays;
-  employeeData.probationStatus  = probDays === 0 ? 'waived' : 'ongoing';
+  employeeData.probationDays = probDays;
 
   if (probDays > 0 && body.joiningDate) {
     const end = new Date(body.joiningDate);
     end.setDate(end.getDate() + probDays);
     employeeData.probationEndDate = end;
+    // Auto-confirm if probation period already elapsed (old joining date)
+    employeeData.probationStatus = end <= new Date() ? 'confirmed' : 'ongoing';
+  } else {
+    employeeData.probationStatus = probDays === 0 ? 'waived' : 'ongoing';
   }
 
   const employee = await Employee.create(employeeData);
@@ -261,7 +264,7 @@ const updateEmployee = async (companyId, id, body) => {
 
   const allowed = [
     'firstName', 'lastName', 'email', 'phone', 'dateOfBirth', 'gender',
-    'address', 'emergencyContact', 'avatar',
+    'addresses', 'emergencyContact', 'avatar',
     'joiningDate', 'employmentType', 'department_id', 'team_id',
     'location_id', 'workPolicy_id', 'reportingManager_id', 'designation_id',
   ];
@@ -270,9 +273,9 @@ const updateEmployee = async (companyId, id, body) => {
     if (body[key] !== undefined) employee[key] = body[key];
   }
 
-  // Patch nested address / emergencyContact without wiping whole object
-  if (body.address) {
-    employee.address = { ...employee.address.toObject?.() ?? employee.address, ...body.address };
+  // addresses is an array — replace entirely if provided
+  if (body.addresses) {
+    employee.addresses = body.addresses;
   }
   if (body.emergencyContact) {
     employee.emergencyContact = {
@@ -374,7 +377,7 @@ const getReportees = async (companyId, id) => {
     .select('firstName lastName employeeId avatar designation_id department_id status')
     .populate('designation_id', 'name')
     .populate('department_id', 'name')
-    .lean();
+    .lean({ virtuals: true });
 };
 
 module.exports = {

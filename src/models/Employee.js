@@ -31,13 +31,17 @@ const employeeSchema = new mongoose.Schema(
       default: null,
     },
 
-    address: {
+    addresses: [{
+      label:   { type: String, enum: ['home', 'permanent', 'current', 'other'], default: 'home' },
       street:  { type: String, default: null },
       city:    { type: String, default: null },
       state:   { type: String, default: null },
       country: { type: String, default: null },
       zip:     { type: String, default: null },
-    },
+      lat:     { type: Number, default: null },
+      lng:     { type: Number, default: null },
+      isPrimary: { type: Boolean, default: false },
+    }],
 
     emergencyContact: {
       name:     { type: String, default: null },

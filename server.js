@@ -4,6 +4,8 @@ const validateEnv                    = require('./src/config/env');
 const connectDB                      = require('./src/config/db');
 const app                            = require('./src/app');
 const { runPermissionsSeeder }       = require('./src/seeders/permissions.seeder');
+const { seedDefaultRoles }           = require('./src/seeders/defaultRoles.seeder');
+const Company                        = require('./src/models/Company');
 const { registerCronJobs }           = require('./src/cron');
 
 const PORT = process.env.PORT || 5000;
@@ -14,6 +16,16 @@ const startServer = async () => {
 
   // Seed system-wide permissions (idempotent — safe on every startup)
   await runPermissionsSeeder();
+
+  // Sync default role-permissions for all existing companies
+  // (picks up any newly added permissions since last startup)
+  const companies = await Company.find({}, '_id').lean();
+  for (const c of companies) {
+    await seedDefaultRoles(c._id);
+  }
+  if (companies.length) {
+    console.log(`[Seeder] Synced default role-permissions for ${companies.length} company(ies).`);
+  }
 
   // Register cron jobs (auto-absent, future: leave reset, rule engine, etc.)
   registerCronJobs();

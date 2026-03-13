@@ -79,8 +79,8 @@ const calculatePayrollRecord = async (employee, month, year, companyId) => {
   }
 
   // ─── 5. Leave data ──────────────────────────────────────────────────────
-  const lwpDays      = await getLWPDays(employee._id, month, year);
-  const paidLeaveDays = await getPaidLeaveDays(employee._id, month, year);
+  const lwpDays       = await getLWPDays(employee._id, month, year, workPolicy.workingDays, locationId, companyId);
+  const paidLeaveDays = await getPaidLeaveDays(employee._id, month, year, workPolicy.workingDays, locationId, companyId);
 
   // ─── 6. Base calculations ───────────────────────────────────────────────
   const earningsComponents  = salary.components.filter(c => c.type === 'earning');
@@ -129,8 +129,11 @@ const calculatePayrollRecord = async (employee, month, year, companyId) => {
     }
   }
 
-  // ─── 10. Component deductions (PF, tax, etc.) ──────────────────────────
-  const componentDeductions = deductionComponents.reduce((sum, c) => sum + c.monthlyAmount, 0);
+  // ─── 10. Component deductions (PF, tax, etc.) — pro-rated for partial months
+  const fullComponentDeductions = deductionComponents.reduce((sum, c) => sum + c.monthlyAmount, 0);
+  const componentDeductions = effectiveWorkingDays < totalWorkingDays
+    ? Math.round((fullComponentDeductions * effectiveWorkingDays / totalWorkingDays) * 100) / 100
+    : fullComponentDeductions;
 
   // ─── 11. Totals ─────────────────────────────────────────────────────────
   const totalDeductions = componentDeductions + lwpDeductionAmount + absentDeductionAmount

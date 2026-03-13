@@ -21,6 +21,7 @@ const Location         = require('../../models/Location');
 const Company          = require('../../models/Company');
 const LeaveRequest     = require('../../models/LeaveRequest');
 const PublicHoliday    = require('../../models/PublicHoliday');
+const { log }          = require('../runner');
 
 // ─── Timezone helpers ────────────────────────────────────────────────────────
 
@@ -92,7 +93,10 @@ const run = async () => {
       tzGroups.get(empTZ).push(emp);
     }
 
-    if (tzGroups.size === 0) continue;
+    if (tzGroups.size === 0) {
+      log('INFO', `auto-absent | ${company.name || companyId} — no employees at 23:00 right now, skipping`);
+      continue;
+    }
 
     // 5. Cache work policies
     const policies = await WorkPolicy.find({ company_id: companyId }).lean();
@@ -106,6 +110,8 @@ const run = async () => {
       if (!todayStr) continue;
       const todayDate = new Date(todayStr + 'T00:00:00Z');
       const year      = todayDate.getUTCFullYear();
+
+      log('INFO', `auto-absent | ${company.name || companyId} | TZ: ${tz} | date: ${todayStr} | employees: ${tzEmployees.length}`);
 
       // Get today's holidays for this timezone's date
       const holidays = await PublicHoliday.find({
@@ -131,7 +137,17 @@ const run = async () => {
         startDate: { $lte: todayDate },
         endDate:   { $gte: todayDate },
       }).lean();
-      const onLeaveIds = new Set(leaves.map((l) => l.employee_id.toString()));
+      // Full-day leaves → on_leave; half-day leaves → employee still expected to work other half
+      const onLeaveIds = new Set();
+      const halfDayLeaveIds = new Set();
+      for (const l of leaves) {
+        const eid = l.employee_id.toString();
+        if (l.isHalfDay) {
+          halfDayLeaveIds.add(eid);
+        } else {
+          onLeaveIds.add(eid);
+        }
+      }
 
       // Build records to insert
       const toInsert = [];
@@ -164,9 +180,15 @@ const run = async () => {
           continue;
         }
 
-        // Leave check
+        // Full-day leave check
         if (onLeaveIds.has(empId)) {
           toInsert.push({ company_id: companyId, employee_id: emp._id, date: todayDate, status: 'on_leave' });
+          continue;
+        }
+
+        // Half-day leave but no clock-in → mark half_day (worked 0 hours but has half-day leave)
+        if (halfDayLeaveIds.has(empId)) {
+          toInsert.push({ company_id: companyId, employee_id: emp._id, date: todayDate, status: 'half_day' });
           continue;
         }
 
@@ -176,16 +198,24 @@ const run = async () => {
 
       // Bulk insert (ignore duplicates)
       if (toInsert.length > 0) {
+        const statusCounts = {};
+        toInsert.forEach(r => { statusCounts[r.status] = (statusCounts[r.status] || 0) + 1; });
+        log('INFO', `auto-absent | ${company.name || companyId} | inserting ${toInsert.length} records: ${JSON.stringify(statusCounts)}`);
+
         try {
           await AttendanceRecord.insertMany(toInsert, { ordered: false });
           totalCreated += toInsert.length;
         } catch (err) {
           if (err.code === 11000 || err.name === 'MongoBulkWriteError') {
-            totalCreated += err.result?.nInserted ?? 0;
+            const inserted = err.result?.nInserted ?? 0;
+            totalCreated += inserted;
+            log('INFO', `auto-absent | ${company.name || companyId} | ${toInsert.length - inserted} duplicates skipped`);
           } else {
             throw err;
           }
         }
+      } else {
+        log('INFO', `auto-absent | ${company.name || companyId} | TZ: ${tz} — all employees already have records, nothing to insert`);
       }
 
       // Mark missed clock-outs for this timezone group
@@ -200,6 +230,9 @@ const run = async () => {
         },
         { $set: { missedClockOut: true } },
       );
+      if (missedResult.modifiedCount > 0) {
+        log('INFO', `auto-absent | ${company.name || companyId} | marked ${missedResult.modifiedCount} missed clock-outs`);
+      }
       totalMissed += missedResult.modifiedCount;
     }
   }

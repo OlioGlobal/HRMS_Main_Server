@@ -27,10 +27,15 @@ const sharedRules = [
     .isIn(['male', 'female', 'other', 'prefer_not_to_say'])
     .withMessage('Invalid gender value.'),
 
-  body('address.city').optional({ nullable: true }).trim().isLength({ max: 100 }).withMessage('City too long.'),
-  body('address.state').optional({ nullable: true }).trim().isLength({ max: 100 }).withMessage('State too long.'),
-  body('address.country').optional({ nullable: true }).trim().isLength({ max: 100 }).withMessage('Country too long.'),
-  body('address.zip').optional({ nullable: true }).trim().isLength({ max: 20 }).withMessage('Zip too long.'),
+  body('addresses').optional().isArray({ max: 5 }).withMessage('Max 5 addresses allowed.'),
+  body('addresses.*.label').optional().isIn(['home', 'permanent', 'current', 'other']).withMessage('Invalid address label.'),
+  body('addresses.*.street').optional({ nullable: true }).trim().isLength({ max: 200 }).withMessage('Street too long.'),
+  body('addresses.*.city').optional({ nullable: true }).trim().isLength({ max: 100 }).withMessage('City too long.'),
+  body('addresses.*.state').optional({ nullable: true }).trim().isLength({ max: 100 }).withMessage('State too long.'),
+  body('addresses.*.country').optional({ nullable: true }).trim().isLength({ max: 100 }).withMessage('Country too long.'),
+  body('addresses.*.zip').optional({ nullable: true }).trim().isLength({ max: 20 }).withMessage('Zip too long.'),
+  body('addresses.*.lat').optional({ nullable: true }).isFloat({ min: -90, max: 90 }).withMessage('Invalid latitude.'),
+  body('addresses.*.lng').optional({ nullable: true }).isFloat({ min: -180, max: 180 }).withMessage('Invalid longitude.'),
 
   body('emergencyContact.phone')
     .optional({ nullable: true }).trim()
