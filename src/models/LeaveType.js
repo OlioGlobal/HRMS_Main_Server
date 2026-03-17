@@ -84,6 +84,10 @@ const leaveTypeSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    restrictDuringProbation: {
+      type: Boolean,
+      default: false,
+    },
     isActive: { type: Boolean, default: true },
   },
   { timestamps: true }

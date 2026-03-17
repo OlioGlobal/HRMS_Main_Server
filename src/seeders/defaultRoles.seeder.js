@@ -140,12 +140,27 @@ const ROLE_DEFINITIONS = {
       { key: 'appraisal_templates:create', scope: 'global' },
       { key: 'appraisal_templates:update', scope: 'global' },
       { key: 'appraisal_templates:delete', scope: 'global' },
+      // Document Types
+      { key: 'document_types:view',   scope: 'global' },
+      { key: 'document_types:create', scope: 'global' },
+      { key: 'document_types:update', scope: 'global' },
+      { key: 'document_types:delete', scope: 'global' },
       // Documents
       { key: 'documents:view',   scope: 'global' },
       { key: 'documents:create', scope: 'global' },
       { key: 'documents:update', scope: 'global' },
       { key: 'documents:delete', scope: 'global' },
       { key: 'documents:export', scope: 'global' },
+      { key: 'documents:verify', scope: 'global' },
+      { key: 'documents:reject', scope: 'global' },
+      // Policy Documents
+      { key: 'policy_documents:view',   scope: 'global' },
+      { key: 'policy_documents:create', scope: 'global' },
+      { key: 'policy_documents:update', scope: 'global' },
+      { key: 'policy_documents:delete', scope: 'global' },
+      // Policy Acknowledgements
+      { key: 'policy_acknowledgements:view',   scope: 'global' },
+      { key: 'policy_acknowledgements:create', scope: 'global' },
       // Notifications
       { key: 'notifications:view',   scope: 'global' },
       { key: 'notifications:create', scope: 'global' },
@@ -220,11 +235,20 @@ const ROLE_DEFINITIONS = {
       { key: 'appraisal_records:view',   scope: 'global' },
       { key: 'appraisal_goals:view',     scope: 'global' },
       { key: 'appraisal_templates:view', scope: 'global' },
-      // Documents
+      // Document Types — view only
+      { key: 'document_types:view',    scope: 'global' },
+      // Documents — full access except delete
       { key: 'documents:view',         scope: 'global' },
       { key: 'documents:create',       scope: 'global' },
       { key: 'documents:update',       scope: 'global' },
       { key: 'documents:export',       scope: 'global' },
+      { key: 'documents:verify',       scope: 'global' },
+      { key: 'documents:reject',       scope: 'global' },
+      // Policy Documents — view
+      { key: 'policy_documents:view',  scope: 'global' },
+      // Policy Acknowledgements
+      { key: 'policy_acknowledgements:view',   scope: 'global' },
+      { key: 'policy_acknowledgements:create', scope: 'global' },
       // Notifications — view only
       { key: 'notifications:view',     scope: 'global' },
       // Reports
@@ -262,6 +286,11 @@ const ROLE_DEFINITIONS = {
       { key: 'appraisal_goals:update',             scope: 'team'   },
       // Documents — view team docs
       { key: 'documents:view',                    scope: 'team'   },
+      { key: 'documents:export',                  scope: 'team'   },
+      // Policy Documents — view
+      { key: 'policy_documents:view',             scope: 'global' },
+      { key: 'policy_acknowledgements:view',      scope: 'self'   },
+      { key: 'policy_acknowledgements:create',    scope: 'self'   },
       // Notifications
       { key: 'notifications:view',                scope: 'self'   },
       // Reports — own team
@@ -303,6 +332,10 @@ const ROLE_DEFINITIONS = {
       { key: 'documents:create',                 scope: 'self' },
       { key: 'documents:delete',                 scope: 'self' },
       { key: 'documents:export',                 scope: 'self' },
+      // Policy Documents — view + acknowledge
+      { key: 'policy_documents:view',            scope: 'global' },
+      { key: 'policy_acknowledgements:view',     scope: 'self' },
+      { key: 'policy_acknowledgements:create',   scope: 'self' },
       // Notifications
       { key: 'notifications:view',               scope: 'self' },
     ],

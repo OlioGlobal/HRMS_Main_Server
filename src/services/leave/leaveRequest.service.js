@@ -25,6 +25,14 @@ const applyLeave = async (companyId, employeeId, body) => {
     throw new AppError(`This leave type is only for ${leaveType.applicableGender} employees.`, 400);
   }
 
+  // ── Probation check ──
+  if (leaveType.restrictDuringProbation && employee.probationEndDate) {
+    const today = new Date();
+    if (today < new Date(employee.probationEndDate)) {
+      throw new AppError('This leave type is not available during probation period.', 400);
+    }
+  }
+
   // ── Half day ──
   if (body.isHalfDay && !leaveType.allowHalfDay) {
     throw new AppError('Half-day is not allowed for this leave type.', 400);

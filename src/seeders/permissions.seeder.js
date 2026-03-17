@@ -170,12 +170,30 @@ const PERMISSIONS = [
   { module: 'appraisal_templates', action: 'update', description: 'Update appraisal template' },
   { module: 'appraisal_templates', action: 'delete', description: 'Delete appraisal template' },
 
-  // Documents
-  { module: 'documents', action: 'view',   description: 'View documents' },
-  { module: 'documents', action: 'create', description: 'Upload document' },
-  { module: 'documents', action: 'update', description: 'Edit document metadata' },
-  { module: 'documents', action: 'delete', description: 'Delete document' },
-  { module: 'documents', action: 'export', description: 'Download document' },
+  // Document Types
+  { module: 'document_types', action: 'view',   description: 'View document types' },
+  { module: 'document_types', action: 'create', description: 'Create document type' },
+  { module: 'document_types', action: 'update', description: 'Update document type' },
+  { module: 'document_types', action: 'delete', description: 'Delete document type' },
+
+  // Employee Documents
+  { module: 'documents', action: 'view',    description: 'View employee documents' },
+  { module: 'documents', action: 'create',  description: 'Upload employee document' },
+  { module: 'documents', action: 'update',  description: 'Edit document metadata' },
+  { module: 'documents', action: 'delete',  description: 'Delete employee document' },
+  { module: 'documents', action: 'export',  description: 'Download employee document' },
+  { module: 'documents', action: 'verify',  description: 'Verify employee document' },
+  { module: 'documents', action: 'reject',  description: 'Reject employee document' },
+
+  // Policy Documents
+  { module: 'policy_documents', action: 'view',   description: 'View company policies' },
+  { module: 'policy_documents', action: 'create', description: 'Upload company policy' },
+  { module: 'policy_documents', action: 'update', description: 'Update policy details' },
+  { module: 'policy_documents', action: 'delete', description: 'Delete company policy' },
+
+  // Policy Acknowledgements
+  { module: 'policy_acknowledgements', action: 'view',   description: 'View policy acknowledgement status' },
+  { module: 'policy_acknowledgements', action: 'create', description: 'Acknowledge a policy' },
 
   // Notifications
   { module: 'notifications', action: 'view',   description: 'View notifications' },

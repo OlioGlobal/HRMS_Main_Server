@@ -17,6 +17,7 @@ const leaveRoutes       = require('./leave/leave.routes');
 const attendanceRoutes  = require('./attendance/attendance.routes');
 const payrollRoutes     = require('./payroll/payroll.routes');
 const appraisalRoutes   = require('./appraisal/appraisal.routes');
+const documentRoutes    = require('./document/document.routes');
 
 // ─── Mount All Routes ──────────────────────────────────────────────────────────
 router.use('/auth',          authRoutes);
@@ -35,5 +36,6 @@ router.use('/leave',         leaveRoutes);
 router.use('/attendance',    attendanceRoutes);
 router.use('/payroll',       payrollRoutes);
 router.use('/appraisal',    appraisalRoutes);
+router.use('/documents',    documentRoutes);
 
 module.exports = router;
