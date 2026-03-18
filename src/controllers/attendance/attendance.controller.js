@@ -54,6 +54,7 @@ const override = catchAsync(async (req, res) => {
 const detectLocation = catchAsync(async (req, res) => {
   const result = await service.detectLocation(
     req.user.companyId,
+    req.user.userId,
     Number(req.query.lat),
     Number(req.query.lng),
   );

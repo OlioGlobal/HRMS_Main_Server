@@ -123,6 +123,18 @@ const employeeSchema = new mongoose.Schema(
       default: 'active',
     },
 
+    // ─── Onboarding ───────────────────────────────────────────────────────────
+    onboardingCompleted:   { type: Boolean, default: false },
+    onboardingCompletedAt: { type: Date,    default: null },
+
+    // ─── Offboarding ──────────────────────────────────────────────────────────
+    lastWorkingDay:          { type: Date,    default: null },
+    knowledgeTransfer:       { type: Boolean, default: false },
+    assetsReturned:          { type: Boolean, default: false },
+    exitInterview:           { type: Boolean, default: false },
+    accessRevoked:           { type: Boolean, default: false },
+    offboardingCompletedAt:  { type: Date,    default: null },
+
     // ─── Portal access ──────────────────────────────────────────────────────────
     // null = no portal login; set when Step 3 is submitted
     user_id: {

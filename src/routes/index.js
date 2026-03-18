@@ -18,6 +18,8 @@ const attendanceRoutes  = require('./attendance/attendance.routes');
 const payrollRoutes     = require('./payroll/payroll.routes');
 const appraisalRoutes   = require('./appraisal/appraisal.routes');
 const documentRoutes    = require('./document/document.routes');
+const boardingRoutes    = require('./onboarding/onboarding.routes');
+const dashboardRoutes   = require('./dashboard/dashboard.routes');
 
 // ─── Mount All Routes ──────────────────────────────────────────────────────────
 router.use('/auth',          authRoutes);
@@ -37,5 +39,7 @@ router.use('/attendance',    attendanceRoutes);
 router.use('/payroll',       payrollRoutes);
 router.use('/appraisal',    appraisalRoutes);
 router.use('/documents',    documentRoutes);
+router.use('/boarding',     boardingRoutes);
+router.use('/dashboard',   dashboardRoutes);
 
 module.exports = router;

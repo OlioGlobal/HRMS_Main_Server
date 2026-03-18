@@ -5,7 +5,7 @@ const WorkPolicy         = require('../../models/WorkPolicy');
 const Location           = require('../../models/Location');
 const Company            = require('../../models/Company');
 const AppError           = require('../../utils/AppError');
-const { detectClockType }          = require('../../utils/geofence');
+const { detectClockType, haversineDistance } = require('../../utils/geofence');
 const { calculateAttendanceStatus } = require('../../utils/calculateAttendanceStatus');
 
 const toObjectId = (id) => new mongoose.Types.ObjectId(id);
@@ -87,13 +87,30 @@ const clockIn = async (companyId, userId, body) => {
   if (body.lat != null && body.lng != null) {
     const company = await Company.findById(companyId).lean();
     if (company.settings?.geofencing?.enabled) {
+      const defaultRadius = company.settings.geofencing.defaultRadius || 100;
       const locations = await Location.find({ company_id: companyId }).lean();
-      const detected = detectClockType(
-        body.lat, body.lng, locations,
-        company.settings.geofencing.defaultRadius || 100,
-      );
+      const detected = detectClockType(body.lat, body.lng, locations, defaultRadius);
       clockInType  = detected.type;
       locationName = detected.locationName;
+
+      // Check employee home address for WFH
+      if (clockInType === 'remote' && employee.addresses?.length) {
+        const home = employee.addresses.find((a) => a.isPrimary)
+          || employee.addresses.find((a) => a.label === 'home')
+          || employee.addresses[0];
+        if (home?.lat && home?.lng) {
+          const homeDist = haversineDistance(body.lat, body.lng, home.lat, home.lng);
+          if (homeDist <= defaultRadius) {
+            clockInType = 'wfh';
+            locationName = 'Home';
+          }
+        }
+      }
+
+      // Block if still remote (outside all allowed zones)
+      if (clockInType === 'remote') {
+        throw new AppError('You are not within an allowed location. Move to your office or home address to clock in.', 400);
+      }
     }
   }
 
@@ -165,12 +182,28 @@ const clockOut = async (companyId, userId, body) => {
   if (body.lat != null && body.lng != null) {
     const company = await Company.findById(companyId).lean();
     if (company.settings?.geofencing?.enabled) {
+      const defaultRadius = company.settings.geofencing.defaultRadius || 100;
       const locations = await Location.find({ company_id: companyId }).lean();
-      const detected = detectClockType(
-        body.lat, body.lng, locations,
-        company.settings.geofencing.defaultRadius || 100,
-      );
+      const detected = detectClockType(body.lat, body.lng, locations, defaultRadius);
       clockOutType = detected.type;
+
+      // Check employee home address for WFH
+      if (clockOutType === 'remote' && employee.addresses?.length) {
+        const home = employee.addresses.find((a) => a.isPrimary)
+          || employee.addresses.find((a) => a.label === 'home')
+          || employee.addresses[0];
+        if (home?.lat && home?.lng) {
+          const homeDist = haversineDistance(body.lat, body.lng, home.lat, home.lng);
+          if (homeDist <= defaultRadius) {
+            clockOutType = 'wfh';
+          }
+        }
+      }
+
+      // Block if outside all allowed zones
+      if (clockOutType === 'remote') {
+        throw new AppError('You are not within an allowed location. Move to your office or home address to clock out.', 400);
+      }
     }
   }
 
@@ -422,14 +455,86 @@ const overrideAttendance = async (companyId, recordId, userId, body) => {
 
 // ─── Detect location (for frontend preview before clock-in) ──────────────────
 
-const detectLocation = async (companyId, lat, lng) => {
+const detectLocation = async (companyId, userId, lat, lng) => {
   const company = await Company.findById(companyId).lean();
+  const defaultRadius = company.settings?.geofencing?.defaultRadius || 100;
+
   if (!company.settings?.geofencing?.enabled) {
-    return { type: 'remote', locationName: null, geofencingEnabled: false };
+    return { type: 'remote', locationName: null, geofencingEnabled: false, zones: [] };
   }
-  const locations = await Location.find({ company_id: companyId }).lean();
-  const result = detectClockType(lat, lng, locations, company.settings.geofencing.defaultRadius || 100);
-  return { ...result, geofencingEnabled: true };
+
+  // Get employee + their work policy's office location
+  const employee = await Employee.findOne({ user_id: userId, company_id: companyId })
+    .select('addresses workPolicy_id')
+    .populate({ path: 'workPolicy_id', select: 'location_id' })
+    .lean();
+
+  const zones = [];
+  let officeLoc = null;
+
+  // Determine which office to show
+  if (employee?.workPolicy_id?.location_id) {
+    // Employee has work policy → use that policy's office location
+    officeLoc = await Location.findById(employee.workPolicy_id.location_id).lean();
+  }
+  if (!officeLoc) {
+    // Fallback: use HQ location
+    officeLoc = await Location.findOne({ company_id: companyId, isHQ: true }).lean();
+  }
+
+  // Add office zone
+  if (officeLoc?.geofence?.lat && officeLoc?.geofence?.lng) {
+    zones.push({
+      lat: officeLoc.geofence.lat,
+      lng: officeLoc.geofence.lng,
+      radius: officeLoc.geofence.radius || defaultRadius,
+      name: officeLoc.name,
+      type: 'office',
+    });
+  }
+
+  // Add employee home zone
+  if (employee?.addresses?.length) {
+    const home = employee.addresses.find((a) => a.isPrimary)
+      || employee.addresses.find((a) => a.label === 'home')
+      || employee.addresses[0];
+    if (home?.lat && home?.lng) {
+      zones.push({
+        lat: home.lat,
+        lng: home.lng,
+        radius: defaultRadius,
+        name: 'Home',
+        type: 'home',
+      });
+    }
+  }
+
+  // Detect type: check office first, then home, then remote
+  let type = 'remote';
+  let locationName = null;
+
+  if (officeLoc?.geofence?.lat && officeLoc?.geofence?.lng) {
+    const offDist = haversineDistance(lat, lng, officeLoc.geofence.lat, officeLoc.geofence.lng);
+    if (offDist <= (officeLoc.geofence.radius || defaultRadius)) {
+      type = 'office';
+      locationName = officeLoc.name;
+    }
+  }
+
+  if (type === 'remote' && employee?.addresses?.length) {
+    const home = employee.addresses.find((a) => a.isPrimary)
+      || employee.addresses.find((a) => a.label === 'home')
+      || employee.addresses[0];
+    if (home?.lat && home?.lng) {
+      const homeDist = haversineDistance(lat, lng, home.lat, home.lng);
+      if (homeDist <= defaultRadius) {
+        type = 'wfh';
+        locationName = 'Home';
+      }
+    }
+  }
+
+  return { type, locationName, geofencingEnabled: true, zones };
 };
 
 module.exports = {
