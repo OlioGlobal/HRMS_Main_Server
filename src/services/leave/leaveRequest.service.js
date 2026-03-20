@@ -5,6 +5,7 @@ const LeaveType    = require('../../models/LeaveType');
 const Employee     = require('../../models/Employee');
 const Company      = require('../../models/Company');
 const AppError     = require('../../utils/AppError');
+const eventBus     = require('../../utils/eventBus');
 const { calculateLeaveDays } = require('../../utils/calculateLeaveDays');
 
 const toObjectId = (id) => new mongoose.Types.ObjectId(id);
@@ -31,6 +32,11 @@ const applyLeave = async (companyId, employeeId, body) => {
     if (today < new Date(employee.probationEndDate)) {
       throw new AppError('This leave type is not available during probation period.', 400);
     }
+  }
+
+  // ── Notice period check ──
+  if (leaveType.restrictDuringNotice && employee.status === 'notice') {
+    throw new AppError('This leave type is not available during notice period.', 400);
   }
 
   // ── Half day ──
@@ -140,7 +146,9 @@ const applyLeave = async (companyId, employeeId, body) => {
     isLWP,
   });
 
-  return request.toObject();
+  const result = request.toObject();
+  eventBus.emit('leave.applied', { companyId, leaveRequest: result, employee });
+  return result;
 };
 
 // ─── List requests for one employee (My Leaves) ────────────────────────────
@@ -322,7 +330,9 @@ const approveLeave = async (companyId, requestId, reviewerId, reviewNote) => {
     }
   }
 
-  return request.toObject();
+  const approvedResult = request.toObject();
+  eventBus.emit('leave.approved', { companyId, leaveRequest: approvedResult, employee: await Employee.findById(request.employee_id).lean() });
+  return approvedResult;
 };
 
 // ─── Reject ─────────────────────────────────────────────────────────────────
@@ -352,7 +362,9 @@ const rejectLeave = async (companyId, requestId, reviewerId, reviewNote) => {
     }
   }
 
-  return request.toObject();
+  const rejectedResult = request.toObject();
+  eventBus.emit('leave.rejected', { companyId, leaveRequest: rejectedResult, employee: await Employee.findById(request.employee_id).lean() });
+  return rejectedResult;
 };
 
 // ─── Cancel (by employee) ───────────────────────────────────────────────────
@@ -392,7 +404,9 @@ const cancelLeave = async (companyId, employeeId, requestId) => {
     }
   }
 
-  return request.toObject();
+  const cancelledResult = request.toObject();
+  eventBus.emit('leave.cancelled', { companyId, leaveRequest: cancelledResult, employee: await Employee.findById(employeeId).lean() });
+  return cancelledResult;
 };
 
 module.exports = {

@@ -88,6 +88,15 @@ const leaveTypeSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    restrictDuringNotice: {
+      type: Boolean,
+      default: false,
+    },
+    autoApproveDays: {
+      type: Number,
+      default: null,
+      min: 1,
+    },
     isActive: { type: Boolean, default: true },
   },
   { timestamps: true }

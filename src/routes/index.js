@@ -19,7 +19,9 @@ const payrollRoutes     = require('./payroll/payroll.routes');
 const appraisalRoutes   = require('./appraisal/appraisal.routes');
 const documentRoutes    = require('./document/document.routes');
 const boardingRoutes    = require('./onboarding/onboarding.routes');
-const dashboardRoutes   = require('./dashboard/dashboard.routes');
+const dashboardRoutes      = require('./dashboard/dashboard.routes');
+const notificationRoutes   = require('./notification/notification.routes');
+const emailActionRoutes    = require('./emailActions.routes');
 
 // ─── Mount All Routes ──────────────────────────────────────────────────────────
 router.use('/auth',          authRoutes);
@@ -40,6 +42,8 @@ router.use('/payroll',       payrollRoutes);
 router.use('/appraisal',    appraisalRoutes);
 router.use('/documents',    documentRoutes);
 router.use('/boarding',     boardingRoutes);
-router.use('/dashboard',   dashboardRoutes);
+router.use('/dashboard',      dashboardRoutes);
+router.use('/notifications',  notificationRoutes);
+router.use('/email-actions',  emailActionRoutes);
 
 module.exports = router;

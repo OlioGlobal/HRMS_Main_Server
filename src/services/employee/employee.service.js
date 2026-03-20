@@ -9,6 +9,14 @@ const { calculateProRatedDays } = require('../../utils/calculateLeaveDays');
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
 
+/** Normalize a date to noon UTC to avoid timezone day-shift issues */
+const toNoonUTC = (dateStr) => {
+  if (!dateStr) return null;
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return null;
+  return new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate(), 12, 0, 0));
+};
+
 // Generate next employeeId for company (EMP001, EMP002, …)
 async function _generateEmployeeId(companyId) {
   const last = await Employee
@@ -122,7 +130,7 @@ const createEmployee = async (companyId, body, requestingUserId) => {
     lastName:      body.lastName,
     email:         body.email         || null,
     phone:         body.phone         || null,
-    dateOfBirth:   body.dateOfBirth   || null,
+    dateOfBirth:   toNoonUTC(body.dateOfBirth),
     gender:        body.gender        || null,
     addresses:     body.addresses     || [],
     emergencyContact: body.emergencyContact || {},
@@ -270,7 +278,9 @@ const updateEmployee = async (companyId, id, body) => {
   ];
 
   for (const key of allowed) {
-    if (body[key] !== undefined) employee[key] = body[key];
+    if (body[key] !== undefined) {
+      employee[key] = key === 'dateOfBirth' ? toNoonUTC(body[key]) : body[key];
+    }
   }
 
   // addresses is an array — replace entirely if provided

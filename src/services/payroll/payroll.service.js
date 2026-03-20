@@ -3,6 +3,7 @@ const PayrollRun    = require('../../models/PayrollRun');
 const PayrollRecord = require('../../models/PayrollRecord');
 const Employee      = require('../../models/Employee');
 const AppError      = require('../../utils/AppError');
+const eventBus      = require('../../utils/eventBus');
 const { calculatePayrollRecord } = require('./calculatePayroll.service');
 
 const toOid = (id) => new mongoose.Types.ObjectId(id);
@@ -171,6 +172,7 @@ const markPaid = async (runId, companyId) => {
   run.paidAt = new Date();
   await run.save();
 
+  eventBus.emit('payroll.paid', { companyId, payrollRun: run.toObject() });
   return run;
 };
 

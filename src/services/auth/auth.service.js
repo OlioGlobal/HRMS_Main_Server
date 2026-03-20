@@ -10,6 +10,7 @@ const { seedDefaultSalaryComponents } = require('../../seeders/salaryComponents.
 const { seedDefaultLeaveTypes }     = require('../../seeders/leaveTypes.seeder');
 const { seedDefaultLeaveTemplates } = require('../../seeders/leaveTemplates.seeder');
 const { seedDefaultDocumentTypes }  = require('../../seeders/documentTypes.seeder');
+const { seedDefaultNotificationRules } = require('../../seeders/notificationRules.seeder');
 const {
   generateAccessToken,
   generateRefreshToken,
@@ -52,6 +53,9 @@ const signup = async ({ companyName, email, password, firstName, lastName, phone
 
   // Seed default document types
   await seedDefaultDocumentTypes(company._id);
+
+  // Seed default notification rules
+  await seedDefaultNotificationRules(company._id);
 
   // Auto-assign Super Admin role to the first user of this company
   await UserRole.create({

@@ -200,6 +200,10 @@ const PERMISSIONS = [
   { module: 'notifications', action: 'create', description: 'Send or broadcast notification' },
   { module: 'notifications', action: 'delete', description: 'Delete notification' },
 
+  // Notification Rules
+  { module: 'notification_rules', action: 'view',   description: 'View notification rules' },
+  { module: 'notification_rules', action: 'update', description: 'Update notification rule settings' },
+
   // Reports
   { module: 'reports', action: 'view',   description: 'View analytics and reports' },
   { module: 'reports', action: 'export', description: 'Export reports' },

@@ -7,6 +7,7 @@ const { runPermissionsSeeder }       = require('./src/seeders/permissions.seeder
 const { seedDefaultRoles }           = require('./src/seeders/defaultRoles.seeder');
 const Company                        = require('./src/models/Company');
 const { registerCronJobs }           = require('./src/cron');
+const { registerNotificationJobs }  = require('./src/services/ruleEngine/registerJobs');
 
 const PORT = process.env.PORT || 5000;
 
@@ -27,8 +28,12 @@ const startServer = async () => {
     console.log(`[Seeder] Synced default role-permissions for ${companies.length} company(ies).`);
   }
 
-  // Register cron jobs (auto-absent, future: leave reset, rule engine, etc.)
+  // Register cron jobs (auto-absent, document expiry)
   registerCronJobs();
+
+  // Register BullMQ notification jobs + event listeners
+  await registerNotificationJobs();
+  require('./src/services/ruleEngine/eventListeners');
 
   const server = app.listen(PORT, () => {
     console.log(`🚀 Server running in ${process.env.NODE_ENV || 'development'} mode on port ${PORT}`);
