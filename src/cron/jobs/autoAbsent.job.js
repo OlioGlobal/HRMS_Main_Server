@@ -113,13 +113,15 @@ const run = async () => {
 
       log('INFO', `auto-absent | ${company.name || companyId} | TZ: ${tz} | date: ${todayStr} | employees: ${tzEmployees.length}`);
 
-      // Get today's holidays for this timezone's date
+      // Get today's holidays — dates stored as noon UTC, so match within the calendar day
+      const dayStart = new Date(todayStr + 'T00:00:00Z');
+      const dayEnd   = new Date(todayStr + 'T23:59:59.999Z');
       const holidays = await PublicHoliday.find({
         company_id: companyId,
         year,
         isActive: true,
         isOptional: false,
-        date: todayDate,
+        date: { $gte: dayStart, $lte: dayEnd },
       }).lean();
 
       // Get existing attendance records for today

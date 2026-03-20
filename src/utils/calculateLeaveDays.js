@@ -59,7 +59,7 @@ const calculateLeaveDays = async (startDate, endDate, opts = {}) => {
     if (employeeId) {
       const optPicked = await EmployeeOptionalHoliday
         .find({ employee_id: employeeId, year: { $in: [...years] } })
-        .populate('holiday_id', 'date')
+        .populate({ path: 'holiday_id', select: 'date', match: { isActive: true } })
         .lean();
       optPicked.forEach((o) => {
         if (o.holiday_id?.date) {

@@ -113,9 +113,9 @@ const refreshAccessToken = async (refreshToken) => {
 
   const user = await User.findById(decoded.userId).select('+refreshTokens');
   if (!user || !user.refreshTokens.includes(refreshToken)) {
-    // Possible reuse attack — revoke all sessions
-    if (user) { user.refreshTokens = []; await user.save(); }
-    throw new AppError('Refresh token revoked. Please log in again.', 401);
+    // Token not found — could be stale cookie after rotation (multi-tab, background tab).
+    // Don't wipe all sessions — just reject this request.
+    throw new AppError('Refresh token expired. Please log in again.', 401);
   }
 
   const payload         = { userId: user._id, companyId: user.company_id, email: user.email };

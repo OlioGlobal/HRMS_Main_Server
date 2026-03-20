@@ -27,13 +27,19 @@ const getHoliday = async (companyId, id) => {
   return doc;
 };
 
+// ─── Normalize date to UTC noon (prevents timezone date-shift) ──────────────
+const toNoonUTC = (d) => {
+  const dt = new Date(d);
+  return new Date(Date.UTC(dt.getFullYear(), dt.getMonth(), dt.getDate(), 12, 0, 0));
+};
+
 // ─── Create ─────────────────────────────────────────────────────────────────
 const createHoliday = async (companyId, body) => {
-  const date = new Date(body.date);
+  body.date = toNoonUTC(body.date);
   const doc = await PublicHoliday.create({
     ...body,
     company_id: companyId,
-    year: date.getFullYear(),
+    year: body.date.getUTCFullYear(),
   });
   return doc.toObject();
 };
@@ -41,11 +47,12 @@ const createHoliday = async (companyId, body) => {
 // ─── Bulk create (for import) ───────────────────────────────────────────────
 const bulkCreateHolidays = async (companyId, holidays) => {
   const docs = holidays.map((h) => {
-    const date = new Date(h.date);
+    const date = toNoonUTC(h.date);
     return {
       ...h,
+      date,
       company_id: companyId,
-      year: date.getFullYear(),
+      year: date.getUTCFullYear(),
       source: h.source || 'imported',
     };
   });
@@ -63,7 +70,10 @@ const updateHoliday = async (companyId, id, body) => {
   const doc = await PublicHoliday.findOne({ _id: id, company_id: companyId });
   if (!doc) throw new AppError('Holiday not found.', 404);
 
-  if (body.date) body.year = new Date(body.date).getFullYear();
+  if (body.date) {
+    body.date = toNoonUTC(body.date);
+    body.year = body.date.getUTCFullYear();
+  }
   Object.assign(doc, body);
   await doc.save();
   return doc.toObject();

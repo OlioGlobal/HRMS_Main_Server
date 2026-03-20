@@ -1,6 +1,7 @@
 /**
  * Registers repeatable BullMQ cron jobs and starts the worker
- * for processing both cron-based and event-based notification rules.
+ * for processing both cron-based and event-based notification rules,
+ * plus system cron jobs (auto-absent, document-expiry).
  *
  * Called from server.js after DB connect.
  */
@@ -8,6 +9,8 @@ const { notificationQueue, createWorker } = require('../../utils/queue');
 const { executeRule } = require('./ruleEngine');
 const Company = require('../../models/Company');
 const NotificationRule = require('../../models/NotificationRule');
+const autoAbsentJob = require('../../cron/jobs/autoAbsent.job');
+const documentExpiryJob = require('../../cron/jobs/documentExpiry.job');
 
 /** All cron-based rule slugs */
 const CRON_SLUGS = [
@@ -83,27 +86,41 @@ const processCronRules = async () => {
  */
 const registerNotificationJobs = async () => {
   try {
-    // Clean up any stale repeatable jobs before registering
+    // Clean up stale repeatable jobs before registering
     const existing = await notificationQueue.getRepeatableJobs();
     for (const job of existing) {
-      if (job.name === 'cron:all') {
-        await notificationQueue.removeRepeatableByKey(job.key);
-      }
+      await notificationQueue.removeRepeatableByKey(job.key);
     }
 
-    // Register a single repeatable cron that fires every hour.
-    // executeRule handles per-rule dedup (once per day), and the hourly cadence
-    // gives timezone coverage for companies in different regions.
+    // ── Notification rules cron: every hour ──
     await notificationQueue.add('cron:all', {}, {
       repeat: { cron: '0 * * * *' },
       removeOnComplete: { count: 24 },
       removeOnFail: { count: 10 },
     });
 
-    // Start worker to process both cron and event jobs
+    // ── Auto-Absent: every hour (checks timezone, processes at 11 PM local) ──
+    await notificationQueue.add('cron:auto-absent', {}, {
+      repeat: { cron: '0 * * * *' },
+      removeOnComplete: { count: 24 },
+      removeOnFail: { count: 10 },
+    });
+
+    // ── Document Expiry: daily at midnight UTC ──
+    await notificationQueue.add('cron:document-expiry', {}, {
+      repeat: { cron: '0 0 * * *' },
+      removeOnComplete: { count: 7 },
+      removeOnFail: { count: 5 },
+    });
+
+    // Start worker to process all job types
     createWorker(async (job) => {
       if (job.name === 'cron:all') {
         await processCronRules();
+      } else if (job.name === 'cron:auto-absent') {
+        await autoAbsentJob.run();
+      } else if (job.name === 'cron:document-expiry') {
+        await documentExpiryJob.run();
       } else if (job.name.startsWith('event:')) {
         const slug = job.name.replace('event:', '');
         const { companyId, ...contextData } = job.data;

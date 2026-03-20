@@ -51,8 +51,11 @@ const logout = catchAsync(async (req, res) => {
   const refreshToken = req.cookies?.refresh_token;
   await authService.logout(req.user?.userId, refreshToken);
 
-  res.clearCookie('access_token',  { path: '/' });
-  res.clearCookie('refresh_token', { path: '/' });
+  const cookieDomain = process.env.COOKIE_DOMAIN ? { domain: process.env.COOKIE_DOMAIN } : {};
+  const isProd = process.env.NODE_ENV === 'production';
+  const clearOpts = { path: '/', httpOnly: true, secure: isProd, sameSite: isProd ? 'none' : 'lax', ...cookieDomain };
+  res.clearCookie('access_token',  clearOpts);
+  res.clearCookie('refresh_token', clearOpts);
 
   sendSuccess(res, { status: 200, message: 'Logged out successfully.' });
 });
