@@ -137,17 +137,22 @@ const listGoals = catchAsync(async (req, res) => {
 
 const createGoal = catchAsync(async (req, res) => {
   const emp = await resolveEmployee(req);
-  const goal = await service.createGoal(req.user.companyId, req.params.recordId, emp._id, req.body);
+  const goal = await service.createGoal(req.user.companyId, req.params.recordId, emp._id, req.body, req.user.userId);
   sendSuccess(res, { status: 201, message: 'Goal created.', data: { goal } });
 });
 
+const createGoalForTeam = catchAsync(async (req, res) => {
+  const goals = await service.createGoalForTeam(req.user.companyId, req.params.cycleId, req.user.userId, req.body);
+  sendSuccess(res, { status: 201, message: `Goal created for ${goals.length} team member(s).`, data: { goals } });
+});
+
 const updateGoal = catchAsync(async (req, res) => {
-  const goal = await service.updateGoal(req.user.companyId, req.params.recordId, req.params.goalId, req.body);
+  const goal = await service.updateGoal(req.user.companyId, req.params.recordId, req.params.goalId, req.body, req.user.userId);
   sendSuccess(res, { message: 'Goal updated.', data: { goal } });
 });
 
 const deleteGoal = catchAsync(async (req, res) => {
-  await service.deleteGoal(req.user.companyId, req.params.recordId, req.params.goalId);
+  await service.deleteGoal(req.user.companyId, req.params.recordId, req.params.goalId, req.user.userId);
   sendSuccess(res, { message: 'Goal deleted.' });
 });
 
@@ -210,7 +215,7 @@ module.exports = {
   listRecords, getRecord, finalizeRecord, shareRecord, assignReviewer,
   getMyAppraisal, getMyHistory, submitSelfRating,
   getTeamAppraisals, submitManagerRating,
-  listGoals, createGoal, updateGoal, deleteGoal, submitGoals, approveGoals, rejectGoals,
+  listGoals, createGoal, createGoalForTeam, updateGoal, deleteGoal, submitGoals, approveGoals, rejectGoals,
   listTemplates, createTemplate, updateTemplate, deleteTemplate,
   getDashboardAppraisal, listReviewers,
 };

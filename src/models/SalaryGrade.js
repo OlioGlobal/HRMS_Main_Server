@@ -9,7 +9,7 @@ const gradeComponentSchema = new mongoose.Schema(
     },
     calcType: {
       type: String,
-      enum: ['fixed', 'percentage'],
+      enum: ['fixed', 'percentage', 'percentOfCTC'],
       required: true,
     },
     value: {

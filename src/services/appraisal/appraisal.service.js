@@ -159,7 +159,7 @@ const activateCycle = async (companyId, cycleId) => {
     });
     records.push(record);
 
-    // Auto-create goals from template
+    // Auto-create goals from template (mandatory + auto-approved)
     for (const tg of templateGoals) {
       goals.push({
         company_id:  companyId,
@@ -169,7 +169,10 @@ const activateCycle = async (companyId, cycleId) => {
         title:       tg.title,
         description: tg.description || null,
         weightage:   tg.defaultWeightage,
-        goalStatus:  'draft',
+        isMandatory: true,
+        goalStatus:  'approved',
+        approvedBy:  cycle.createdBy,
+        approvedAt:  new Date(),
       });
     }
   }
@@ -433,7 +436,7 @@ const listGoals = async (recordId) => {
   return AppraisalGoal.find({ record_id: recordId }).sort({ createdAt: 1 }).lean();
 };
 
-const createGoal = async (companyId, recordId, employeeId, body) => {
+const createGoal = async (companyId, recordId, employeeId, body, userId) => {
   const record = await AppraisalRecord.findOne({ _id: recordId, company_id: companyId });
   if (!record) throw new AppError('Appraisal record not found', 404);
 
@@ -445,26 +448,96 @@ const createGoal = async (companyId, recordId, employeeId, body) => {
     throw new AppError(`Maximum ${cycle.maxGoals || 10} goals allowed`, 400);
   }
 
+  // Determine if creator is a manager (not the employee themselves)
+  const creatorEmp = await Employee.findOne({ user_id: userId, company_id: companyId }).select('_id').lean();
+  const isManagerCreated = creatorEmp && creatorEmp._id.toString() !== record.employee_id.toString();
+
   const goal = await AppraisalGoal.create({
     company_id:  companyId,
     cycle_id:    record.cycle_id,
-    employee_id: employeeId,
+    employee_id: record.employee_id,
     record_id:   recordId,
     title:       body.title,
     description: body.description || null,
     weightage:   body.weightage,
-    goalStatus:  'draft',
+    isMandatory: isManagerCreated,
+    goalStatus:  isManagerCreated ? 'approved' : 'draft',
+    approvedBy:  isManagerCreated ? userId : null,
+    approvedAt:  isManagerCreated ? new Date() : null,
   });
 
   return goal;
 };
 
-const updateGoal = async (companyId, recordId, goalId, body) => {
+// Manager creates same goal for all team members
+const createGoalForTeam = async (companyId, cycleId, userId, body) => {
+  const cycle = await AppraisalCycle.findOne({ _id: cycleId, company_id: companyId }).lean();
+  if (!cycle) throw new AppError('Appraisal cycle not found', 404);
+
+  const managerEmp = await Employee.findOne({ user_id: userId, company_id: companyId }).select('_id').lean();
+  if (!managerEmp) throw new AppError('Manager employee record not found', 404);
+
+  // Find all records in this cycle where the employee reports to this manager
+  const reportees = await Employee.find({
+    company_id: companyId,
+    reportingManager_id: managerEmp._id,
+    status: 'active',
+  }).select('_id').lean();
+
+  if (!reportees.length) throw new AppError('No team members found', 404);
+
+  const records = await AppraisalRecord.find({
+    company_id: companyId,
+    cycle_id: cycleId,
+    employee_id: { $in: reportees.map(r => r._id) },
+  }).lean();
+
+  if (!records.length) throw new AppError('No appraisal records found for team members', 404);
+
+  const created = [];
+  for (const record of records) {
+    const existingCount = await AppraisalGoal.countDocuments({ record_id: record._id });
+    if (existingCount >= (cycle.maxGoals || 10)) continue;
+
+    const goal = await AppraisalGoal.create({
+      company_id:  companyId,
+      cycle_id:    cycleId,
+      employee_id: record.employee_id,
+      record_id:   record._id,
+      title:       body.title,
+      description: body.description || null,
+      weightage:   body.weightage,
+      isMandatory: true,
+      goalStatus:  'approved',
+      approvedBy:  userId,
+      approvedAt:  new Date(),
+    });
+    created.push(goal);
+  }
+
+  return created;
+};
+
+const updateGoal = async (companyId, recordId, goalId, body, userId) => {
   const goal = await AppraisalGoal.findOne({ _id: goalId, record_id: recordId, company_id: companyId });
   if (!goal) throw new AppError('Goal not found', 404);
 
-  if (goal.goalStatus === 'approved') {
+  if (goal.goalStatus === 'approved' && !goal.isMandatory) {
     throw new AppError('Approved goals cannot be edited', 400);
+  }
+
+  // Mandatory goals: only manager can edit title/description/weightage, employee can only self-rate
+  if (goal.isMandatory) {
+    const record = await AppraisalRecord.findById(recordId).lean();
+    const emp = await Employee.findOne({ user_id: userId, company_id: companyId }).select('_id').lean();
+    const isEmployee = emp && record && emp._id.toString() === record.employee_id.toString();
+
+    if (isEmployee) {
+      // Employee can only update self-rating fields on mandatory goals
+      if (body.title !== undefined || body.description !== undefined || body.weightage !== undefined) {
+        throw new AppError('You cannot edit mandatory goal details. You can only add your self-rating.', 403);
+      }
+    }
   }
 
   if (body.title !== undefined)       goal.title = body.title;
@@ -478,10 +551,21 @@ const updateGoal = async (companyId, recordId, goalId, body) => {
   return goal;
 };
 
-const deleteGoal = async (companyId, recordId, goalId) => {
+const deleteGoal = async (companyId, recordId, goalId, userId) => {
   const goal = await AppraisalGoal.findOne({ _id: goalId, record_id: recordId, company_id: companyId });
   if (!goal) throw new AppError('Goal not found', 404);
   if (goal.goalStatus === 'approved') throw new AppError('Approved goals cannot be deleted', 400);
+  if (goal.isMandatory) throw new AppError('Mandatory goals cannot be deleted', 400);
+
+  // Only manager/HR can delete — employees cannot delete their own goals
+  if (userId) {
+    const record = await AppraisalRecord.findById(recordId).lean();
+    const emp = await Employee.findOne({ user_id: userId, company_id: companyId }).select('_id').lean();
+    if (emp && record && emp._id.toString() === record.employee_id.toString()) {
+      throw new AppError('Employees cannot delete goals. Contact your manager.', 403);
+    }
+  }
+
   await goal.deleteOne();
 };
 
@@ -669,7 +753,7 @@ module.exports = {
   // Team
   getTeamAppraisals, submitManagerRating,
   // Goals
-  listGoals, createGoal, updateGoal, deleteGoal, submitGoals, approveGoals, rejectGoals,
+  listGoals, createGoal, createGoalForTeam, updateGoal, deleteGoal, submitGoals, approveGoals, rejectGoals,
   // Templates
   listTemplates, createTemplate, updateTemplate, deleteTemplate,
   // Dashboard

@@ -1,6 +1,7 @@
-const { format, addDays, differenceInDays, startOfDay, endOfDay } = require('date-fns');
+const { format, addDays, differenceInDays, endOfDay } = require('date-fns');
 const PublicHoliday = require('../../../models/PublicHoliday');
 const Employee = require('../../../models/Employee');
+const Location = require('../../../models/Location');
 
 module.exports = {
   slug: 'holiday-reminder',
@@ -12,7 +13,6 @@ module.exports = {
 
     const rangeEnd = endOfDay(addDays(today, daysBefore));
 
-    // Find active, non-optional holidays within range (today → today + daysBefore)
     const holidays = await PublicHoliday.find({
       company_id: companyId,
       date: { $gte: today, $lte: rangeEnd },
@@ -22,7 +22,15 @@ module.exports = {
 
     if (!holidays.length) return [];
 
-    // Get all active employees with portal access + their location
+    // Pre-fetch location names
+    const locationIds = holidays.filter(h => h.location_id).map(h => h.location_id);
+    const locations = locationIds.length > 0
+      ? await Location.find({ _id: { $in: locationIds } }).select('name').lean()
+      : [];
+    const locMap = {};
+    locations.forEach(l => { locMap[l._id.toString()] = l.name; });
+
+    // Get ALL active employees with portal access
     const employees = await Employee.find({
       company_id: companyId,
       status: 'active',
@@ -35,13 +43,13 @@ module.exports = {
 
     for (const holiday of holidays) {
       const daysLeft = differenceInDays(new Date(holiday.date), today);
+      const locationName = holiday.location_id ? locMap[holiday.location_id.toString()] || '' : '';
+      const isLocationSpecific = !!holiday.location_id;
 
+      // Send to ALL employees, but include location info
       for (const emp of employees) {
-        // If holiday is location-specific, only notify employees at that location
-        if (holiday.location_id && emp.location_id &&
-            holiday.location_id.toString() !== emp.location_id.toString()) {
-          continue;
-        }
+        const isAtLocation = !isLocationSpecific ||
+          (emp.location_id && emp.location_id.toString() === holiday.location_id.toString());
 
         recipients.push({
           userId: emp.user_id.toString(),
@@ -52,6 +60,12 @@ module.exports = {
             holidayName: holiday.name,
             holidayDate: format(new Date(holiday.date), 'dd MMM yyyy'),
             daysLeft,
+            locationName: locationName || 'All Locations',
+            isLocationSpecific,
+            isAtLocation,
+            locationNote: isLocationSpecific
+              ? `This holiday is for ${locationName} office.`
+              : 'This is a company-wide holiday.',
           },
           actionUrl: '/dashboard/settings/holidays',
         });

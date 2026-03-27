@@ -152,8 +152,8 @@ const executeRule = async (companyId, ruleSlug, contextData = {}) => {
     return { ...stats, skipped: true, reason: 'disabled' };
   }
 
-  // 3. Dedup for cron rules: check if already ran successfully today
-  if (rule.triggerType === 'cron') {
+  // 3. Dedup for cron rules: check if already ran successfully today (skip for frequent rules like shift-notification)
+  if (rule.triggerType === 'cron' && !contextData?._skipDedup) {
     const todayStart = startOfDayUTC();
     const existingExecution = await RuleExecution.findOne({
       company_id: companyId,

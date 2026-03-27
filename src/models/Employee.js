@@ -80,6 +80,11 @@ const employeeSchema = new mongoose.Schema(
       ref:     'WorkPolicy',
       default: null,
     },
+    workMode: {
+      type:    String,
+      enum:    ['office', 'wfh', 'field'],
+      default: 'office',
+    },
 
     // Self-referencing — who this employee reports to
     reportingManager_id: {

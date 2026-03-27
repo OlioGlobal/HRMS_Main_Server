@@ -47,6 +47,7 @@ const notificationRuleSchema = new Schema(
       runTime: { type: String, default: '09:00' },
       repeatIntervalDays: { type: Number, default: null },
       maxNotifications: { type: Number, default: null },
+      reminderMinutes: { type: Number, default: null },
     },
     recipients: {
       employee: { type: Boolean, default: false },

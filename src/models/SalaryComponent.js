@@ -21,7 +21,7 @@ const salaryComponentSchema = new mongoose.Schema(
     },
     calcType: {
       type: String,
-      enum: ['fixed', 'percentage'],
+      enum: ['fixed', 'percentage', 'percentOfCTC'],
       default: 'fixed',
     },
     percentOf: {

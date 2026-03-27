@@ -140,6 +140,7 @@ const createEmployee = async (companyId, body, requestingUserId) => {
     team_id:        body.team_id        || null,
     location_id:    body.location_id    || null,
     workPolicy_id:  body.workPolicy_id  || null,
+    workMode:       body.workMode       || 'office',
     reportingManager_id: body.reportingManager_id || null,
     designation_id: body.designation_id || null,
     status:         'active',
@@ -274,7 +275,7 @@ const updateEmployee = async (companyId, id, body) => {
     'firstName', 'lastName', 'email', 'phone', 'dateOfBirth', 'gender',
     'addresses', 'emergencyContact', 'avatar',
     'joiningDate', 'employmentType', 'department_id', 'team_id',
-    'location_id', 'workPolicy_id', 'reportingManager_id', 'designation_id',
+    'location_id', 'workPolicy_id', 'workMode', 'reportingManager_id', 'designation_id',
   ];
 
   for (const key of allowed) {

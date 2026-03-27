@@ -5,9 +5,11 @@ const authenticate = require('../../middleware/authenticate');
 const { signupValidator, loginValidator } = require('../../validators/auth/auth.validator');
 
 // Public
-router.post('/signup',  signupValidator, controller.signup);
-router.post('/login',   loginValidator,  controller.login);
-router.post('/refresh',                  controller.refresh);
+router.post('/signup',          signupValidator, controller.signup);
+router.post('/login',           loginValidator,  controller.login);
+router.post('/refresh',                          controller.refresh);
+router.post('/forgot-password',                  controller.forgotPassword);
+router.post('/reset-password',                   controller.resetPassword);
 
 // Protected
 router.post('/logout', authenticate, controller.logout);

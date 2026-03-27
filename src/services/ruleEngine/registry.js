@@ -18,6 +18,9 @@ const registry = {
   'work-anniversary':       require('./handlers/workAnniversary'),
   'holiday-reminder':       require('./handlers/holidayReminder'),
   'leave-auto-approve':     require('./handlers/leaveAutoApprove'),
+  'shift-notification':     require('./handlers/shiftNotification'),
+  'wfh-notification':            require('./handlers/wfhNotification'),
+  'reimbursement-notification':  require('./handlers/reimbursementNotification'),
 };
 
 module.exports = registry;

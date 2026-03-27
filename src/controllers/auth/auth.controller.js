@@ -78,4 +78,17 @@ const getMe = catchAsync(async (req, res) => {
   sendSuccess(res, { status: 200, message: 'User fetched.', data: { user, roles, permissions } });
 });
 
-module.exports = { signup, login, logout, refresh, getMe };
+// POST /api/auth/forgot-password
+const forgotPassword = catchAsync(async (req, res) => {
+  await authService.forgotPassword(req.body.email);
+  sendSuccess(res, { status: 200, message: 'If this email exists, a reset link has been sent.' });
+});
+
+// POST /api/auth/reset-password
+const resetPassword = catchAsync(async (req, res) => {
+  const { token, email, password } = req.body;
+  const result = await authService.resetPassword(token, email, password);
+  sendSuccess(res, { status: 200, message: result.message });
+});
+
+module.exports = { signup, login, logout, refresh, getMe, forgotPassword, resetPassword };

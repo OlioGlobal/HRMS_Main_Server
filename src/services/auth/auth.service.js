@@ -11,6 +11,7 @@ const { seedDefaultLeaveTypes }     = require('../../seeders/leaveTypes.seeder')
 const { seedDefaultLeaveTemplates } = require('../../seeders/leaveTemplates.seeder');
 const { seedDefaultDocumentTypes }  = require('../../seeders/documentTypes.seeder');
 const { seedDefaultNotificationRules } = require('../../seeders/notificationRules.seeder');
+const { seedDefaultExpenseCategories } = require('../../seeders/expenseCategories.seeder');
 const {
   generateAccessToken,
   generateRefreshToken,
@@ -56,6 +57,9 @@ const signup = async ({ companyName, email, password, firstName, lastName, phone
 
   // Seed default notification rules
   await seedDefaultNotificationRules(company._id);
+
+  // Seed default expense categories
+  await seedDefaultExpenseCategories(company._id);
 
   // Auto-assign Super Admin role to the first user of this company
   await UserRole.create({
@@ -172,4 +176,95 @@ const getMe = async (userId) => {
   return { user, roles, permissions };
 };
 
-module.exports = { signup, login, logout, refreshAccessToken, getMe };
+// ─── Forgot Password ──────────────────────────────────────────────────────────
+const crypto = require('crypto');
+const { sendEmail, compileTemplate } = require('../../utils/email');
+
+const forgotPassword = async (email) => {
+  const user = await User.findOne({ email: email.toLowerCase() });
+  if (!user) {
+    // Don't reveal if email exists — always return success
+    return;
+  }
+
+  // Generate reset token
+  const resetToken = crypto.randomBytes(32).toString('hex');
+  const hashedToken = crypto.createHash('sha256').update(resetToken).digest('hex');
+
+  user.passwordResetToken = hashedToken;
+  user.passwordResetExpires = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+  await user.save({ validateBeforeSave: false });
+
+  // Build reset URL
+  const clientUrl = process.env.CLIENT_URL || 'http://localhost:3000';
+  const resetUrl = `${clientUrl}/reset-password?token=${resetToken}&email=${encodeURIComponent(user.email)}`;
+
+  // Send email
+  const company = await Company.findById(user.company_id).select('name').lean();
+  const html = `<!DOCTYPE html>
+<html><head><style>
+  body{margin:0;padding:0;background:#f4f5f7;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif}
+  .c{max-width:600px;margin:24px auto;background:#fff;border-radius:8px;overflow:hidden}
+  .h{background:#18181b;padding:24px;text-align:center;color:#fff;font-size:20px;font-weight:600}
+  .b{padding:32px 24px;color:#27272a;line-height:1.6}
+  .b h2{margin:0 0 16px;font-size:18px;color:#18181b}
+  .b p{margin:0 0 12px;font-size:14px}
+  .btn{display:inline-block;padding:14px 36px;background:#ea580c;color:#fff;text-decoration:none;border-radius:8px;font-weight:700;font-size:14px;margin:16px 0}
+  .expire{font-size:12px;color:#a1a1aa;margin-top:8px}
+  .f{padding:16px 24px;text-align:center;font-size:12px;color:#a1a1aa;border-top:1px solid #e4e4e7}
+</style></head><body>
+<div class="c">
+  <div class="h">${company?.name || 'HRMS'}</div>
+  <div class="b">
+    <h2>Reset Your Password</h2>
+    <p>Hi ${user.firstName},</p>
+    <p>We received a request to reset your password. Click the button below to set a new password:</p>
+    <div style="text-align:center">
+      <a href="${resetUrl}" class="btn">Reset Password</a>
+    </div>
+    <p class="expire">This link expires in 1 hour. If you didn't request this, please ignore this email.</p>
+    <p style="font-size:12px;color:#71717a;word-break:break-all">Or copy this link: ${resetUrl}</p>
+  </div>
+  <div class="f">This is an automated email from ${company?.name || 'HRMS'}. Please do not reply.</div>
+</div>
+</body></html>`;
+
+  await sendEmail({
+    to: user.email,
+    subject: `Reset Your Password - ${company?.name || 'HRMS'}`,
+    html,
+  });
+};
+
+// ─── Reset Password ───────────────────────────────────────────────────────────
+const resetPassword = async (token, email, newPassword) => {
+  if (!token || !email || !newPassword) {
+    throw new AppError('Token, email, and new password are required.', 400);
+  }
+
+  if (newPassword.length < 8) {
+    throw new AppError('Password must be at least 8 characters.', 400);
+  }
+
+  const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
+
+  const user = await User.findOne({
+    email: email.toLowerCase(),
+    passwordResetToken: hashedToken,
+    passwordResetExpires: { $gt: new Date() },
+  }).select('+passwordResetToken +passwordResetExpires +refreshTokens');
+
+  if (!user) {
+    throw new AppError('Invalid or expired reset link. Please request a new one.', 400);
+  }
+
+  user.password = newPassword;
+  user.passwordResetToken = null;
+  user.passwordResetExpires = null;
+  user.refreshTokens = []; // Invalidate all sessions
+  await user.save();
+
+  return { message: 'Password reset successfully. Please log in with your new password.' };
+};
+
+module.exports = { signup, login, logout, refreshAccessToken, getMe, forgotPassword, resetPassword };

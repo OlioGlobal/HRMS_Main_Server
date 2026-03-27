@@ -4,7 +4,7 @@ const componentLineSchema = new mongoose.Schema(
   {
     component_id: { type: mongoose.Schema.Types.ObjectId, ref: 'SalaryComponent' },
     name:     { type: String, required: true },
-    calcType: { type: String, enum: ['fixed', 'percentage'], required: true },
+    calcType: { type: String, enum: ['fixed', 'percentage', 'percentOfCTC'], required: true },
     value:    { type: Number, required: true },
     amount:   { type: Number, required: true },
   },
@@ -73,6 +73,14 @@ const payrollRecordSchema = new mongoose.Schema(
     // ─── Comp-off tracking ──────────────────────────────────────────────────────
     compOffHoursEarned: { type: Number, default: 0 },
     compOffCredited:    { type: Boolean, default: false },
+
+    // ─── Reimbursements (non-taxable, added directly to netPay) ────────────────
+    reimbursementTotal: { type: Number, default: 0 },
+    reimbursements: [{
+      reimbursement_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Reimbursement' },
+      description: { type: String },
+      amount: { type: Number },
+    }],
 
     // ─── Flags ──────────────────────────────────────────────────────────────────
     status: {

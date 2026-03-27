@@ -27,6 +27,26 @@ const CRON_SLUGS = [
 ];
 
 /**
+ * Process shift notifications (every 15 min) for all companies.
+ * Unlike daily cron rules, shift notifications skip the daily dedup check.
+ */
+const processShiftNotifications = async () => {
+  try {
+    const companies = await Company.find({}).select('_id').lean();
+    for (const company of companies) {
+      try {
+        // executeRule with skipDedup flag — shift notifications can fire multiple times per day
+        await executeRule(company._id.toString(), 'shift-notification', { _skipDedup: true });
+      } catch (err) {
+        console.error(`[RuleEngine] shift-notification failed for company ${company._id}:`, err.message);
+      }
+    }
+  } catch (err) {
+    console.error('[RuleEngine] processShiftNotifications failed:', err.message);
+  }
+};
+
+/**
  * Process all cron rules across all companies.
  * The dedup logic inside executeRule prevents running the same rule twice per day.
  */
@@ -113,10 +133,19 @@ const registerNotificationJobs = async () => {
       removeOnFail: { count: 5 },
     });
 
+    // ── Shift Notification: every 15 minutes ──
+    await notificationQueue.add('cron:shift', {}, {
+      repeat: { cron: '*/15 * * * *' },
+      removeOnComplete: { count: 96 },
+      removeOnFail: { count: 10 },
+    });
+
     // Start worker to process all job types
     createWorker(async (job) => {
       if (job.name === 'cron:all') {
         await processCronRules();
+      } else if (job.name === 'cron:shift') {
+        await processShiftNotifications();
       } else if (job.name === 'cron:auto-absent') {
         await autoAbsentJob.run();
       } else if (job.name === 'cron:document-expiry') {

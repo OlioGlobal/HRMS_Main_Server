@@ -107,9 +107,17 @@ const clockIn = async (companyId, userId, body) => {
         }
       }
 
-      // Block if still remote (outside all allowed zones)
-      if (clockInType === 'remote') {
-        throw new AppError('You are not within an allowed location. Move to your office or home address to clock in.', 400);
+      // Check WFH authorization before blocking
+      if (clockInType === 'remote' || clockInType === 'wfh') {
+        const { isWFHAuthorized } = require('../wfh/wfh.service');
+        const wfhCheck = await isWFHAuthorized(companyId, employee._id, new Date());
+
+        if (wfhCheck.authorized) {
+          clockInType = clockInType === 'remote' ? 'wfh' : clockInType;
+          locationName = locationName || 'WFH (Authorized)';
+        } else {
+          throw new AppError(wfhCheck.reason || 'WFH not authorized for today. Please submit a WFH request or go to your office.', 400);
+        }
       }
     }
   }
@@ -200,10 +208,8 @@ const clockOut = async (companyId, userId, body) => {
         }
       }
 
-      // Block if outside all allowed zones
-      if (clockOutType === 'remote') {
-        throw new AppError('You are not within an allowed location. Move to your office or home address to clock out.', 400);
-      }
+      // Clock-out: if employee clocked in successfully, always allow clock out
+      // Just detect the type for record keeping, don't block
     }
   }
 

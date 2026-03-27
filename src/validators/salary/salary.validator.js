@@ -22,7 +22,7 @@ const createComponentValidator = [
     .isIn(['earning', 'deduction']).withMessage('Type must be earning or deduction.'),
   body('calcType')
     .optional()
-    .isIn(['fixed', 'percentage']).withMessage('calcType must be fixed or percentage.'),
+    .isIn(['fixed', 'percentage', 'percentOfCTC']).withMessage('calcType must be fixed, percentage, or percentOfCTC.'),
   body('percentOf')
     .optional({ nullable: true })
     .customSanitizer((v) => (v === '' ? null : v))
@@ -46,7 +46,7 @@ const updateComponentValidator = [
     .isIn(['earning', 'deduction']).withMessage('Type must be earning or deduction.'),
   body('calcType')
     .optional()
-    .isIn(['fixed', 'percentage']).withMessage('calcType must be fixed or percentage.'),
+    .isIn(['fixed', 'percentage', 'percentOfCTC']).withMessage('calcType must be fixed, percentage, or percentOfCTC.'),
   body('percentOf')
     .optional({ nullable: true })
     .customSanitizer((v) => (v === '' ? null : v))
@@ -79,7 +79,7 @@ const createGradeValidator = [
     .isMongoId().withMessage('Invalid component ID.'),
   body('components.*.calcType')
     .notEmpty().withMessage('calcType is required.')
-    .isIn(['fixed', 'percentage']).withMessage('calcType must be fixed or percentage.'),
+    .isIn(['fixed', 'percentage', 'percentOfCTC']).withMessage('calcType must be fixed, percentage, or percentOfCTC.'),
   body('components.*.value')
     .notEmpty().withMessage('value is required.')
     .isFloat({ min: 0 }).withMessage('value must be a non-negative number.'),
@@ -104,7 +104,7 @@ const updateGradeValidator = [
     .isMongoId().withMessage('Invalid component ID.'),
   body('components.*.calcType')
     .optional()
-    .isIn(['fixed', 'percentage']).withMessage('calcType must be fixed or percentage.'),
+    .isIn(['fixed', 'percentage', 'percentOfCTC']).withMessage('calcType must be fixed, percentage, or percentOfCTC.'),
   body('components.*.value')
     .optional()
     .isFloat({ min: 0 }).withMessage('value must be a non-negative number.'),
@@ -127,6 +127,9 @@ const assignSalaryValidator = [
   body('reason')
     .optional().trim()
     .isLength({ max: 200 }).withMessage('Reason must be under 200 characters.'),
+  body('ctcAnnual')
+    .optional({ nullable: true })
+    .isFloat({ min: 0 }).withMessage('ctcAnnual must be a non-negative number.'),
   body('components')
     .optional()
     .isArray({ min: 1 }).withMessage('At least one component is required.'),
@@ -135,7 +138,7 @@ const assignSalaryValidator = [
     .isMongoId().withMessage('Invalid component ID.'),
   body('components.*.calcType')
     .optional()
-    .isIn(['fixed', 'percentage']).withMessage('calcType must be fixed or percentage.'),
+    .isIn(['fixed', 'percentage', 'percentOfCTC']).withMessage('calcType must be fixed, percentage, or percentOfCTC.'),
   body('components.*.value')
     .optional()
     .isFloat({ min: 0 }).withMessage('value must be a non-negative number.'),

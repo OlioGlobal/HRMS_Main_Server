@@ -346,14 +346,15 @@ const DEFAULT_RULES = [
     templates: {
       inApp: {
         title: 'Upcoming Holiday: {{holidayName}}',
-        body: '{{holidayName}} is on {{holidayDate}} ({{daysLeft}} day(s) from now). Enjoy your day off!',
+        body: '{{holidayName}} is on {{holidayDate}} ({{daysLeft}} day(s) from now). {{locationNote}}',
       },
       email: {
         subject: 'Upcoming Holiday: {{holidayName}} on {{holidayDate}}',
         body: wrapEmail(
           '<h2>Upcoming Holiday</h2>' +
           '<p><strong>{{holidayName}}</strong> is on <strong>{{holidayDate}}</strong>.</p>' +
-          '<p>This is a reminder that the office will be closed. Enjoy your day off!</p>'
+          '<p>{{locationNote}}</p>' +
+          '<p>Enjoy your day off!</p>'
         ),
       },
     },
@@ -383,6 +384,115 @@ const DEFAULT_RULES = [
           '<p>Your <strong>{{leaveType}}</strong> request has been automatically approved.</p>' +
           '<div class="highlight"><p><strong>Period:</strong> {{startDate}} - {{endDate}}<br/>' +
           '<strong>Reason:</strong> No action taken within {{autoApproveDays}} day(s).</p></div>'
+        ),
+      },
+    },
+  },
+
+  // 13. Shift Notification
+  {
+    slug: 'shift-notification',
+    name: 'Shift Notification',
+    description: 'Notifies employees about shift start, shift end, and when they complete their required working hours.',
+    triggerType: 'cron',
+    cronSchedule: '*/15 * * * *',
+    isEnabled: true,
+    isSystem: true,
+    config: { daysBefore: null, daysAfter: null, runTime: null, reminderMinutes: 15 },
+    recipients: { employee: true, manager: false, hr: false },
+    channels: { inApp: true, email: false },
+    templates: {
+      inApp: {
+        title: '{{shiftTitle}}',
+        body: '{{shiftMessage}}',
+      },
+      email: {
+        subject: '{{shiftTitle}} - {{employeeName}}',
+        body: wrapEmail(
+          '<h2>{{shiftTitle}}</h2>' +
+          '<p>Hi <strong>{{employeeName}}</strong>,</p>' +
+          '<p>{{shiftMessage}}</p>'
+        ),
+      },
+    },
+  },
+
+  // 14. WFH Notification
+  {
+    slug: 'wfh-notification',
+    name: 'WFH Request Notification',
+    description: 'Notifies employees and managers about WFH request submissions, approvals, and rejections.',
+    triggerType: 'event',
+    eventName: 'wfh.requested,wfh.approved,wfh.rejected',
+    isEnabled: true,
+    isSystem: true,
+    config: { daysBefore: null, daysAfter: null, runTime: null },
+    recipients: { employee: true, manager: true, hr: false },
+    channels: { inApp: true, email: false },
+    templates: {
+      inApp: {
+        title: 'WFH Request {{status}}',
+        body: '{{employeeName}} requested WFH for {{date}}. Status: {{status}}.',
+      },
+      email: {
+        subject: 'WFH Request {{status}} - {{employeeName}}',
+        body: wrapEmail(
+          '<h2>WFH Request {{status}}</h2>' +
+          '<p>{{employeeName}} has a WFH request update.</p>' +
+          '<div class="highlight"><p><strong>Employee:</strong> {{employeeName}}<br/>' +
+          '<strong>Date:</strong> {{date}}<br/>' +
+          '<strong>Reason:</strong> {{reason}}<br/>' +
+          '<strong>Status:</strong> {{status}}</p></div>' +
+          '{{#if approveUrl}}' +
+          '<div style="margin-top:24px;text-align:center">' +
+          '<a href="{{approveUrl}}" style="display:inline-block;padding:12px 32px;background:#16a34a;color:#fff;text-decoration:none;border-radius:8px;font-weight:600;margin-right:12px">Approve</a>' +
+          '<a href="{{rejectUrl}}" style="display:inline-block;padding:12px 32px;background:#dc2626;color:#fff;text-decoration:none;border-radius:8px;font-weight:600">Reject</a>' +
+          '</div>' +
+          '<p style="margin-top:12px;font-size:12px;color:#a1a1aa;text-align:center">These links expire in 72 hours.</p>' +
+          '{{/if}}'
+        ),
+      },
+    },
+  },
+  {
+    slug: 'reimbursement-notification',
+    name: 'Reimbursement Notification',
+    description: 'Notifies about reimbursement submissions, approvals, rejections, and payments.',
+    triggerType: 'event',
+    eventName: 'reimbursement.submitted,reimbursement.manager_approved,reimbursement.hr_approved,reimbursement.paid,reimbursement.rejected',
+    isEnabled: true,
+    isSystem: true,
+    config: { daysBefore: null, daysAfter: null, runTime: null },
+    recipients: { employee: true, manager: true, hr: true },
+    channels: { inApp: true, email: true },
+    templates: {
+      inApp: {
+        title: 'Reimbursement {{status}}',
+        body: '{{employeeName}}: {{description}} — ₹{{amount}}. Status: {{status}}.',
+      },
+      email: {
+        subject: 'Reimbursement {{status}} — {{employeeName}}',
+        body: wrapEmail(
+          '<h2>Reimbursement {{status}}</h2>' +
+          '<p>Hi <strong>{{recipientName}}</strong>,</p>' +
+          '<p>A reimbursement claim has been updated.</p>' +
+          '<div class="highlight"><p><strong>Employee:</strong> {{employeeName}}<br/>' +
+          '<strong>Category:</strong> {{category}}<br/>' +
+          '<strong>Amount:</strong> ₹{{amount}}<br/>' +
+          '<strong>Description:</strong> {{description}}<br/>' +
+          '<strong>Status:</strong> {{status}}</p></div>' +
+          '{{#if hasReceipt}}' +
+          '<div style="margin-top:16px;text-align:center">' +
+          '<a href="{{viewReceiptUrl}}" style="display:inline-block;padding:10px 24px;background:#3b82f6;color:#fff;text-decoration:none;border-radius:8px;font-weight:600;font-size:13px">View Receipt</a>' +
+          '</div>' +
+          '{{/if}}' +
+          '{{#if approveUrl}}' +
+          '<div style="margin-top:16px;text-align:center">' +
+          '<a href="{{approveUrl}}" style="display:inline-block;padding:12px 32px;background:#16a34a;color:#fff;text-decoration:none;border-radius:8px;font-weight:600;margin-right:12px">Approve</a>' +
+          '<a href="{{rejectUrl}}" style="display:inline-block;padding:12px 32px;background:#dc2626;color:#fff;text-decoration:none;border-radius:8px;font-weight:600">Reject</a>' +
+          '</div>' +
+          '<p style="margin-top:12px;font-size:12px;color:#a1a1aa;text-align:center">These links expire in 72 hours.</p>' +
+          '{{/if}}'
         ),
       },
     },

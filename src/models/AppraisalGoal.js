@@ -45,6 +45,9 @@ const appraisalGoalSchema = new mongoose.Schema(
       max: [100, 'Maximum weightage is 100%'],
     },
 
+    // Mandatory flag — set by template, employee can't delete
+    isMandatory: { type: Boolean, default: false },
+
     // Goal approval
     goalStatus: {
       type: String,

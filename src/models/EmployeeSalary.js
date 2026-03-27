@@ -9,7 +9,7 @@ const salarySnapshotComponentSchema = new mongoose.Schema(
     },
     name:     { type: String, required: true },
     type:     { type: String, enum: ['earning', 'deduction'], required: true },
-    calcType: { type: String, enum: ['fixed', 'percentage'], required: true },
+    calcType: { type: String, enum: ['fixed', 'percentage', 'percentOfCTC'], required: true },
     value:    { type: Number, required: true, min: 0 },
     monthlyAmount: { type: Number, required: true },
   },

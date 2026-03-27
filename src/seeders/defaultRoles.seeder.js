@@ -175,6 +175,23 @@ const ROLE_DEFINITIONS = {
       { key: 'roles:assign', scope: 'global' },
       // Settings — view only
       { key: 'settings:view', scope: 'global' },
+      // WFH Requests
+      { key: 'wfh_requests:view',    scope: 'global' },
+      { key: 'wfh_requests:create',  scope: 'global' },
+      { key: 'wfh_requests:approve', scope: 'global' },
+      { key: 'wfh_requests:reject',  scope: 'global' },
+      // Reimbursements
+      { key: 'reimbursements:view',    scope: 'global' },
+      { key: 'reimbursements:create',  scope: 'global' },
+      { key: 'reimbursements:update',  scope: 'global' },
+      { key: 'reimbursements:delete',  scope: 'global' },
+      { key: 'reimbursements:approve', scope: 'global' },
+      { key: 'reimbursements:reject',  scope: 'global' },
+      // Expense Categories
+      { key: 'expense_categories:view',   scope: 'global' },
+      { key: 'expense_categories:create', scope: 'global' },
+      { key: 'expense_categories:update', scope: 'global' },
+      { key: 'expense_categories:delete', scope: 'global' },
     ],
   },
 
@@ -254,6 +271,14 @@ const ROLE_DEFINITIONS = {
       // Reports
       { key: 'reports:view',           scope: 'global' },
       { key: 'reports:export',         scope: 'global' },
+      // WFH Requests — view only
+      { key: 'wfh_requests:view',      scope: 'department' },
+      { key: 'wfh_requests:create',    scope: 'department' },
+      // Reimbursements — view only
+      { key: 'reimbursements:view',    scope: 'department' },
+      { key: 'reimbursements:create',  scope: 'department' },
+      // Expense Categories — view only
+      { key: 'expense_categories:view', scope: 'department' },
     ],
   },
 
@@ -295,6 +320,18 @@ const ROLE_DEFINITIONS = {
       { key: 'notifications:view',                scope: 'self'   },
       // Reports — own team
       { key: 'reports:view',                      scope: 'team'   },
+      // WFH Requests — approve/reject for team
+      { key: 'wfh_requests:view',    scope: 'team' },
+      { key: 'wfh_requests:create',  scope: 'team' },
+      { key: 'wfh_requests:approve', scope: 'team' },
+      { key: 'wfh_requests:reject',  scope: 'team' },
+      // Reimbursements — approve/reject for team
+      { key: 'reimbursements:view',    scope: 'team' },
+      { key: 'reimbursements:create',  scope: 'team' },
+      { key: 'reimbursements:approve', scope: 'team' },
+      { key: 'reimbursements:reject',  scope: 'team' },
+      // Expense Categories — view
+      { key: 'expense_categories:view', scope: 'team' },
     ],
   },
 
@@ -338,6 +375,12 @@ const ROLE_DEFINITIONS = {
       { key: 'policy_acknowledgements:create',   scope: 'self' },
       // Notifications
       { key: 'notifications:view',               scope: 'self' },
+      // WFH Requests — own
+      { key: 'wfh_requests:view',   scope: 'self' },
+      { key: 'wfh_requests:create', scope: 'self' },
+      // Reimbursements — own
+      { key: 'reimbursements:view',   scope: 'self' },
+      { key: 'reimbursements:create', scope: 'self' },
     ],
   },
 };

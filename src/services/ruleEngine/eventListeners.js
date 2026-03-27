@@ -10,7 +10,15 @@ const EVENT_RULE_MAP = {
   'leave.approved':  'leave-notification',
   'leave.rejected':  'leave-notification',
   'leave.cancelled': 'leave-notification',
+  'wfh.requested':   'wfh-notification',
+  'wfh.approved':    'wfh-notification',
+  'wfh.rejected':    'wfh-notification',
   'payroll.paid':    'payslip-ready',
+  'reimbursement.submitted':        'reimbursement-notification',
+  'reimbursement.manager_approved': 'reimbursement-notification',
+  'reimbursement.hr_approved':      'reimbursement-notification',
+  'reimbursement.paid':             'reimbursement-notification',
+  'reimbursement.rejected':         'reimbursement-notification',
 };
 
 Object.entries(EVENT_RULE_MAP).forEach(([event, slug]) => {

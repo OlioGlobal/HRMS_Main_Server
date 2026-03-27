@@ -224,6 +224,26 @@ const PERMISSIONS = [
   { module: 'rules', action: 'update', description: 'Update business rule' },
   { module: 'rules', action: 'delete', description: 'Delete business rule' },
 
+  // WFH Requests
+  { module: 'wfh_requests', action: 'view',    description: 'View WFH requests' },
+  { module: 'wfh_requests', action: 'create',  description: 'Submit WFH request' },
+  { module: 'wfh_requests', action: 'approve', description: 'Approve WFH request' },
+  { module: 'wfh_requests', action: 'reject',  description: 'Reject WFH request' },
+
+  // Reimbursements
+  { module: 'reimbursements', action: 'view',    description: 'View reimbursement claims' },
+  { module: 'reimbursements', action: 'create',  description: 'Create reimbursement claim' },
+  { module: 'reimbursements', action: 'update',  description: 'Update reimbursement claim' },
+  { module: 'reimbursements', action: 'delete',  description: 'Delete reimbursement claim' },
+  { module: 'reimbursements', action: 'approve', description: 'Approve reimbursement claim' },
+  { module: 'reimbursements', action: 'reject',  description: 'Reject reimbursement claim' },
+
+  // Expense Categories
+  { module: 'expense_categories', action: 'view',   description: 'View expense categories' },
+  { module: 'expense_categories', action: 'create', description: 'Create expense category' },
+  { module: 'expense_categories', action: 'update', description: 'Update expense category' },
+  { module: 'expense_categories', action: 'delete', description: 'Delete expense category' },
+
   // Audit Logs
   { module: 'audit_logs', action: 'view',   description: 'View system audit trail' },
   { module: 'audit_logs', action: 'export', description: 'Export audit logs' },

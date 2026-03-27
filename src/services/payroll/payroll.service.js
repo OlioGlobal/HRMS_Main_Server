@@ -172,6 +172,16 @@ const markPaid = async (runId, companyId) => {
   run.paidAt = new Date();
   await run.save();
 
+  // ── Mark reimbursements as paid ──
+  const { markPaidByPayroll } = require('../reimbursement/reimbursement.service');
+  const records = await PayrollRecord.find({ payrollRun_id: run._id }).lean();
+  for (const rec of records) {
+    if (rec.reimbursements?.length > 0) {
+      const claimIds = rec.reimbursements.map(r => r.reimbursement_id);
+      await markPaidByPayroll(claimIds, run._id);
+    }
+  }
+
   eventBus.emit('payroll.paid', { companyId, payrollRun: run.toObject() });
   return run;
 };

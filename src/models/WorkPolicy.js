@@ -54,6 +54,14 @@ const workPolicySchema = new mongoose.Schema(
     lateDeductionAfterCount:    { type: Number,  default: 0 },       // free passes per month
     ignoreLatIfHoursCompleted:  { type: Boolean, default: false },   // skip late deduction if full hours worked
 
+    // ─── Hybrid / WFH Config ─────────────────────────────────────────────────
+    hybridEnabled: { type: Boolean, default: false },
+    wfhDays: {
+      type: [String],
+      enum: ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'],
+      default: [],
+    },
+
     isDefault: { type: Boolean, default: false },   // one default policy per company
     isActive:  { type: Boolean, default: true  },
   },

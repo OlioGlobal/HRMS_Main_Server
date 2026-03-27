@@ -5,6 +5,7 @@ const LeaveRequest = require('../models/LeaveRequest');
 const LeaveBalance = require('../models/LeaveBalance');
 const Employee = require('../models/Employee');
 const eventBus = require('../utils/eventBus');
+const wfhCtrl = require('../controllers/wfh/wfh.controller');
 
 /**
  * Email action routes — no cookie auth, uses JWT token in query string.
@@ -140,6 +141,102 @@ button:hover{background:#b91c1c}</style>
 <label>Reason for rejection *</label>
 <textarea name="reason" required placeholder="Please provide a reason..."></textarea>
 <button type="submit">Reject Leave</button>
+</form></div></body></html>`;
+}
+
+// ─── WFH Email Actions ──────────────────────────────────────────────────────
+router.get('/wfh/approve', wfhCtrl.approveFromEmail);
+router.get('/wfh/reject',  wfhCtrl.rejectFromEmail);
+
+// ─── Reimbursement Email Actions ────────────────────────────────────────────
+const Reimbursement = require('../models/Reimbursement');
+
+router.get('/reimbursement/approve', async (req, res) => {
+  try {
+    const { token } = req.query;
+    if (!token) return res.status(400).send(renderPage('Error', 'Missing token.'));
+
+    const payload = verifyActionToken(token);
+    const { requestId, companyId, reviewerId, action } = payload;
+
+    if (action !== 'approve') return res.status(400).send(renderPage('Error', 'Invalid action.'));
+
+    const claim = await Reimbursement.findOne({ _id: requestId, company_id: companyId });
+    if (!claim) return res.status(404).send(renderPage('Not Found', 'Reimbursement claim not found.'));
+    if (claim.status !== 'submitted') return res.send(renderPage('Already Processed', `This claim is already "${claim.status}".`));
+
+    claim.status = 'manager_approved';
+    claim.managerApprovedBy = reviewerId;
+    claim.managerApprovedAt = new Date();
+    await claim.save();
+
+    const employee = await Employee.findById(claim.employee_id).lean();
+    eventBus.emit('reimbursement.manager_approved', { companyId, claim: claim.toObject(), employee });
+
+    res.send(renderPage('Approved ✅', `Reimbursement claim of ₹${claim.amount} has been approved. HR will process it next.`));
+  } catch (err) {
+    if (err.name === 'TokenExpiredError') {
+      return res.status(401).send(renderPage('Link Expired', 'This action link has expired. Please login to the HRMS to approve.'));
+    }
+    console.error('[EmailAction] reimbursement approve error:', err.message);
+    res.status(500).send(renderPage('Error', 'Something went wrong. Please login to the HRMS.'));
+  }
+});
+
+router.get('/reimbursement/reject', async (req, res) => {
+  try {
+    const { token, reason } = req.query;
+    if (!token) return res.status(400).send(renderPage('Error', 'Missing token.'));
+
+    const payload = verifyActionToken(token);
+    const { requestId, companyId, reviewerId, action } = payload;
+
+    if (action !== 'reject') return res.status(400).send(renderPage('Error', 'Invalid action.'));
+
+    const claim = await Reimbursement.findOne({ _id: requestId, company_id: companyId });
+    if (!claim) return res.status(404).send(renderPage('Not Found', 'Reimbursement claim not found.'));
+    if (!['submitted', 'manager_approved'].includes(claim.status)) {
+      return res.send(renderPage('Already Processed', `This claim is already "${claim.status}".`));
+    }
+
+    if (!reason) {
+      return res.send(renderReimbursementRejectForm(token));
+    }
+
+    claim.status = 'rejected';
+    claim.rejectedBy = reviewerId;
+    claim.rejectedAt = new Date();
+    claim.rejectionReason = reason;
+    claim.rejectedAtStage = claim.status === 'submitted' ? 'manager' : 'hr';
+    await claim.save();
+
+    const employee = await Employee.findById(claim.employee_id).lean();
+    eventBus.emit('reimbursement.rejected', { companyId, claim: claim.toObject(), employee });
+
+    res.send(renderPage('Rejected ❌', `Reimbursement claim has been rejected. Reason: "${reason}"`));
+  } catch (err) {
+    if (err.name === 'TokenExpiredError') {
+      return res.status(401).send(renderPage('Link Expired', 'This action link has expired. Please login to the HRMS to reject.'));
+    }
+    console.error('[EmailAction] reimbursement reject error:', err.message);
+    res.status(500).send(renderPage('Error', 'Something went wrong. Please login to the HRMS.'));
+  }
+});
+
+function renderReimbursementRejectForm(token) {
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<style>body{margin:0;padding:40px 20px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#f4f5f7;display:flex;justify-content:center;align-items:center;min-height:100vh}
+.card{background:#fff;border-radius:12px;padding:40px;max-width:450px;box-shadow:0 2px 8px rgba(0,0,0,0.08)}
+h1{font-size:20px;margin:0 0 16px;color:#18181b}label{font-size:14px;color:#52525b;display:block;margin-bottom:6px}
+textarea{width:100%;border:1px solid #d4d4d8;border-radius:8px;padding:10px;font-size:14px;resize:vertical;min-height:80px;font-family:inherit;box-sizing:border-box}
+button{margin-top:16px;width:100%;padding:12px;background:#dc2626;color:#fff;border:none;border-radius:8px;font-size:15px;font-weight:600;cursor:pointer}
+button:hover{background:#b91c1c}</style>
+</head><body><div class="card"><h1>Reject Reimbursement Claim</h1>
+<form method="GET" action="/api/email-actions/reimbursement/reject">
+<input type="hidden" name="token" value="${token}">
+<label>Reason for rejection *</label>
+<textarea name="reason" required placeholder="Please provide a reason..."></textarea>
+<button type="submit">Reject Claim</button>
 </form></div></body></html>`;
 }
 

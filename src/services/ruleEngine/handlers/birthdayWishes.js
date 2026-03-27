@@ -33,7 +33,15 @@ const findRecipients = async (companyId, contextData, config) => {
 
     if (!employees.length) return [];
 
+    // Get ALL active employees with portal access (for notifying everyone)
+    const allEmployees = await Employee.find({
+      company_id: companyId,
+      status: 'active',
+      user_id: { $ne: null },
+    }).select('_id user_id firstName lastName').lean();
+
     const recipients = [];
+    const addedUserIds = new Set();
 
     for (const emp of employees) {
       const employeeName = fullName(emp);
@@ -46,27 +54,24 @@ const findRecipients = async (companyId, contextData, config) => {
         department,
       };
 
-      // Employee — birthday greeting
-      if (emp.user_id?._id) {
-        recipients.push({
-          userId: emp.user_id._id.toString(),
-          recipientType: 'employee',
-          variables,
-          actionUrl,
-        });
-      }
+      // Notify ALL employees about this birthday
+      for (const other of allEmployees) {
+        if (!other.user_id) continue;
+        const uid = other.user_id.toString();
+        // Prevent duplicate if same person has birthday and is also in allEmployees
+        const dedupKey = `${uid}-${emp._id}`;
+        if (addedUserIds.has(dedupKey)) continue;
+        addedUserIds.add(dedupKey);
 
-      // Manager — reminder
-      if (emp.reportingManager_id?.user_id) {
-        const managerId =
-          typeof emp.reportingManager_id.user_id === 'object'
-            ? emp.reportingManager_id.user_id.toString()
-            : emp.reportingManager_id.user_id.toString();
-
+        const isBirthdayPerson = uid === emp.user_id?._id?.toString();
         recipients.push({
-          userId: managerId,
-          recipientType: 'manager',
-          variables,
+          userId: uid,
+          recipientType: isBirthdayPerson ? 'employee' : 'manager',
+          variables: {
+            ...variables,
+            recipientName: `${other.firstName} ${other.lastName}`,
+            isBirthdayPerson,
+          },
           actionUrl,
         });
       }

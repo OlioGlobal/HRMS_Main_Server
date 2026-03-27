@@ -40,6 +40,9 @@ router.patch( '/records/:recordId/goals-submit',     authenticate, ctrl.submitGo
 router.patch( '/records/:recordId/goals-approve',    authenticate, authorize('appraisal_goals', 'approve'), ctrl.approveGoals);
 router.patch( '/records/:recordId/goals-reject',     authenticate, authorize('appraisal_goals', 'approve'), v.rejectGoalsValidator, ctrl.rejectGoals);
 
+// Manager: create same goal for all team members in a cycle
+router.post(  '/cycles/:cycleId/goals/team',         authenticate, v.createGoalValidator, ctrl.createGoalForTeam);
+
 // ─── Templates ─────────────────────────────────────────────────────────────
 router.get(   '/templates',     authenticate, authorize('appraisal_templates', 'view'),   ctrl.listTemplates);
 router.post(  '/templates',     authenticate, authorize('appraisal_templates', 'create'), v.createTemplateValidator, ctrl.createTemplate);

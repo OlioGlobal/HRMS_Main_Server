@@ -146,6 +146,17 @@ const calculatePayrollRecord = async (employee, month, year, companyId) => {
     netPay = 0;
   }
 
+  // ─── 12. Reimbursements (non-taxable, added directly to netPay) ────────
+  const { getApprovedForPayroll } = require('../reimbursement/reimbursement.service');
+  const approvedReimbursements = await getApprovedForPayroll(companyId, employee._id, month, year);
+  const reimbursementTotal = Math.round(approvedReimbursements.reduce((sum, r) => sum + r.amount, 0) * 100) / 100;
+  const reimbursements = approvedReimbursements.map(r => ({
+    reimbursement_id: r._id,
+    description: r.description,
+    amount: r.amount,
+  }));
+  netPay = Math.round((netPay + reimbursementTotal) * 100) / 100;
+
   // ─── Build record ───────────────────────────────────────────────────────
   return {
     company_id: companyId,
@@ -193,6 +204,9 @@ const calculatePayrollRecord = async (employee, month, year, companyId) => {
 
     compOffHoursEarned,
     compOffCredited: false,
+
+    reimbursementTotal,
+    reimbursements,
 
     grossEarnings: Math.round(grossEarnings * 100) / 100,
     totalDeductions: Math.round(totalDeductions * 100) / 100,
