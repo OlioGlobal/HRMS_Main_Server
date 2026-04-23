@@ -1,8 +1,31 @@
-const catchAsync      = require('../../utils/catchAsync');
-const { sendSuccess } = require('../../utils/response');
-const service         = require('../../services/document/employeeDocument.service');
-const Employee        = require('../../models/Employee');
-const AppError        = require('../../utils/AppError');
+const catchAsync        = require('../../utils/catchAsync');
+const { sendSuccess }   = require('../../utils/response');
+const service           = require('../../services/document/employeeDocument.service');
+const Employee          = require('../../models/Employee');
+const AppError          = require('../../utils/AppError');
+const { sendEmail }     = require('../../utils/email');
+const { _buildHrNotificationEmail } = (() => {
+  // Inline minimal HR notification for document upload
+  const build = ({ companyName, hrName, candidateName, designation, joiningDate, action, details, hrmsLink }) => `
+<!DOCTYPE html><html><body style="margin:0;padding:0;background:#f3f4f6;font-family:Arial,sans-serif;">
+<div style="max-width:600px;margin:32px auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,0.08);">
+  <div style="background:#dc2626;padding:24px 32px;"><h1 style="color:#fff;margin:0;font-size:20px;">${companyName}</h1><p style="color:#fca5a5;margin:4px 0 0;font-size:13px;">Pre-Boarding Activity</p></div>
+  <div style="padding:32px;">
+    <p style="margin:0 0 8px;font-size:15px;">Hi <strong>${hrName}</strong>,</p>
+    <p style="margin:0 0 24px;font-size:14px;line-height:1.6;">${action}</p>
+    <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:20px;margin-bottom:24px;">
+      <table style="width:100%;font-size:13px;color:#374151;border-collapse:collapse;">
+        <tr><td style="padding:5px 0;width:140px;color:#6b7280;">Candidate</td><td style="padding:5px 0;font-weight:600;">${candidateName}</td></tr>
+        ${designation ? `<tr><td style="padding:5px 0;color:#6b7280;">Position</td><td style="padding:5px 0;">${designation}</td></tr>` : ''}
+        ${details ? `<tr><td style="padding:5px 0;color:#6b7280;">Details</td><td style="padding:5px 0;">${details}</td></tr>` : ''}
+      </table>
+    </div>
+    ${hrmsLink ? `<div style="text-align:center;margin:24px 0;"><a href="${hrmsLink}" style="background:#dc2626;color:#fff;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:700;font-size:14px;display:inline-block;">View in HRMS →</a></div>` : ''}
+  </div>
+  <div style="background:#f9fafb;border-top:1px solid #e5e7eb;padding:16px 32px;text-align:center;font-size:12px;color:#9ca3af;">${companyName} HRMS · Automated notification</div>
+</div></body></html>`;
+  return { _buildHrNotificationEmail: build };
+})();
 
 const _resolveEmployee = async (companyId, userId) => {
   const emp = await Employee.findOne({ company_id: companyId, user_id: userId }).lean();
@@ -101,6 +124,51 @@ const myDelete = catchAsync(async (req, res) => {
   sendSuccess(res, { message: 'Document deleted' });
 });
 
+// Pre-boarding public upload — authenticated via token
+const uploadPreboarding = catchAsync(async (req, res) => {
+  if (!req.file) throw new AppError('No file uploaded', 400);
+  const { token, documentTypeId } = req.body;
+  if (!token) throw new AppError('Missing token', 400);
+
+  const employee = await Employee.findOne({
+    preBoardingToken:       token,
+    preBoardingTokenExpiry: { $gt: new Date() },
+  }).populate('company_id', 'name').populate('designation_id', 'name').populate('assignedHr_id', 'firstName lastName email').lean();
+  if (!employee) throw new AppError('Invalid or expired pre-boarding link.', 401);
+
+  const doc = await service.uploadDocument(employee.company_id._id ?? employee.company_id, employee._id, employee._id, {
+    documentTypeId,
+    file: req.file,
+  });
+
+  // Notify assigned HR
+  try {
+    const hr = employee.assignedHr_id;
+    if (hr?.email) {
+      const companyName = employee.company_id?.name ?? 'HR Team';
+      const candidateName = `${employee.firstName} ${employee.lastName}`;
+      await sendEmail({
+        to: hr.email,
+        subject: `[Pre-Boarding] Document Uploaded — ${candidateName}`,
+        html: _buildHrNotificationEmail({
+          companyName,
+          hrName:        hr.firstName ?? 'HR',
+          candidateName,
+          designation:   employee.designation_id?.name ?? '',
+          joiningDate:   employee.joiningDate,
+          action:        `<strong>${candidateName}</strong> has uploaded a document that requires your review.`,
+          details:       `Document type: ${doc.documentType_id ?? documentTypeId}`,
+          hrmsLink:      `${process.env.CLIENT_URL}/dashboard/workforce/hiring`,
+        }),
+      });
+    }
+  } catch (e) {
+    console.error('[Preboarding] Doc upload notify failed:', e.message);
+  }
+
+  sendSuccess(res, { status: 201, message: 'Document uploaded', data: { document: doc } });
+});
+
 module.exports = {
   listDocuments,
   uploadDocument,
@@ -117,4 +185,5 @@ module.exports = {
   myUpload,
   myDownload,
   myDelete,
+  uploadPreboarding,
 };

@@ -57,6 +57,10 @@ const leaveRequestSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    balanceYear: {
+      type: Number,
+      default: null,
+    },
     appliedAt: {
       type: Date,
       default: Date.now,

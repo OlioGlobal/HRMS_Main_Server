@@ -35,6 +35,7 @@ const userSchema = new mongoose.Schema(
     passwordResetToken:   { type: String, select: false, default: null },
     passwordResetExpires: { type: Date,   select: false, default: null },
     lastLogin:            { type: Date,   default: null },
+    loginPreference:      { type: String, enum: ['dashboard', 'portal'], default: null },
     refreshTokens:        { type: [String], select: false, default: [] },
   },
   { timestamps: true }

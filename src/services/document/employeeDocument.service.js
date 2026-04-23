@@ -12,7 +12,7 @@ const _logAudit = async (data) => {
 
 // ─── List documents for an employee ─────────────────────────────────────────
 const listEmployeeDocuments = async (companyId, employeeId, filters = {}) => {
-  const query = { company_id: companyId, employee_id: employeeId };
+  const query = { company_id: companyId, employee_id: employeeId, isVisibleToEmployee: true };
   if (filters.category) {
     const typeIds = await DocumentType.find({ company_id: companyId, category: filters.category }).distinct('_id');
     query.document_type_id = { $in: typeIds };
@@ -215,10 +215,9 @@ const getDocumentChecklist = async (companyId, employeeId) => {
   }).lean();
 
   const uploaded = await EmployeeDocument.find({
-    company_id:          companyId,
-    employee_id:         employeeId,
-    isVisibleToEmployee: true,
-  }).lean();
+    company_id:  companyId,
+    employee_id: employeeId,
+  }).sort({ createdAt: -1 }).lean();
 
   const checklist = requiredTypes.map((type) => {
     const doc = uploaded.find(

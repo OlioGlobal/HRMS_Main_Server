@@ -7,6 +7,7 @@ const Company      = require('../../models/Company');
 const AppError     = require('../../utils/AppError');
 const eventBus     = require('../../utils/eventBus');
 const { calculateLeaveDays } = require('../../utils/calculateLeaveDays');
+const { getLeaveYear }       = require('../../utils/getLeaveYear');
 
 const toObjectId = (id) => new mongoose.Types.ObjectId(id);
 
@@ -101,12 +102,13 @@ const applyLeave = async (companyId, employeeId, body) => {
   }
 
   // ── Balance check ──
-  const year = startDate.getFullYear();
+  const fiscalYearStart = company.settings?.fiscalYearStart ?? 1;
+  const balanceYear = getLeaveYear(startDate, leaveType.resetCycle, fiscalYearStart);
   const balance = await LeaveBalance.findOne({
     company_id: companyId,
     employee_id: employeeId,
     leaveType_id: leaveType._id,
-    year,
+    year: balanceYear,
   });
 
   let isLWP = false;
@@ -144,6 +146,7 @@ const applyLeave = async (companyId, employeeId, body) => {
     halfDaySession: body.isHalfDay ? (body.halfDaySession || 'morning') : null,
     reason:         body.reason || null,
     isLWP,
+    balanceYear,
   });
 
   const result = request.toObject();
@@ -320,7 +323,7 @@ const approveLeave = async (companyId, requestId, reviewerId, reviewNote) => {
       company_id:  companyId,
       employee_id: request.employee_id,
       leaveType_id: request.leaveType_id,
-      year: request.startDate.getFullYear(),
+      year: request.balanceYear ?? request.startDate.getFullYear(),
     });
 
     if (balance) {
@@ -353,7 +356,7 @@ const rejectLeave = async (companyId, requestId, reviewerId, reviewNote) => {
       company_id:  companyId,
       employee_id: request.employee_id,
       leaveType_id: request.leaveType_id,
-      year: request.startDate.getFullYear(),
+      year: request.balanceYear ?? request.startDate.getFullYear(),
     });
 
     if (balance) {
@@ -391,7 +394,7 @@ const cancelLeave = async (companyId, employeeId, requestId) => {
       company_id:  companyId,
       employee_id: employeeId,
       leaveType_id: request.leaveType_id,
-      year: request.startDate.getFullYear(),
+      year: request.balanceYear ?? request.startDate.getFullYear(),
     });
 
     if (balance) {

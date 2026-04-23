@@ -31,8 +31,8 @@ app.use(cors({
 }));
 
 // ─── Body Parsing ──────────────────────────────────────────────────────────────
-app.use(express.json({ limit: '10kb' }));
-app.use(express.urlencoded({ extended: true, limit: '10kb' }));
+app.use(express.json({ limit: '5mb' }));
+app.use(express.urlencoded({ extended: true, limit: '5mb' }));
 
 // ─── Cookie Parser ─────────────────────────────────────────────────────────────
 app.use(cookieParser());

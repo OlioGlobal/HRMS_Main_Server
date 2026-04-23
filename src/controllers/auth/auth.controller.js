@@ -91,4 +91,14 @@ const resetPassword = catchAsync(async (req, res) => {
   sendSuccess(res, { status: 200, message: result.message });
 });
 
-module.exports = { signup, login, logout, refresh, getMe, forgotPassword, resetPassword };
+const updatePreference = catchAsync(async (req, res) => {
+  const { loginPreference } = req.body;
+  if (!['dashboard', 'portal'].includes(loginPreference)) {
+    return sendSuccess(res, { status: 400, message: 'Invalid preference.' });
+  }
+  const User = require('../../models/User');
+  await User.findByIdAndUpdate(req.user.userId, { loginPreference });
+  sendSuccess(res, { message: 'Preference saved.', data: { loginPreference } });
+});
+
+module.exports = { signup, login, logout, refresh, getMe, updatePreference, forgotPassword, resetPassword };

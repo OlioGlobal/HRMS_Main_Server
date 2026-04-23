@@ -251,6 +251,31 @@ const PERMISSIONS = [
   // Settings
   { module: 'settings', action: 'view',   description: 'View system configuration' },
   { module: 'settings', action: 'update', description: 'Modify system configuration' },
+
+  // Letter Templates
+  { module: 'letter_templates', action: 'view',   description: 'View letter templates' },
+  { module: 'letter_templates', action: 'create', description: 'Create letter template' },
+  { module: 'letter_templates', action: 'update', description: 'Update letter template' },
+  { module: 'letter_templates', action: 'delete', description: 'Delete letter template' },
+
+  // Hiring Pipelines
+  { module: 'hiring_pipelines', action: 'view',   description: 'View hiring pipelines' },
+  { module: 'hiring_pipelines', action: 'create', description: 'Create hiring pipeline' },
+  { module: 'hiring_pipelines', action: 'update', description: 'Update hiring pipeline' },
+  { module: 'hiring_pipelines', action: 'delete', description: 'Delete hiring pipeline' },
+
+  // Letters (generated)
+  { module: 'letters', action: 'view',   description: 'View generated letters' },
+  { module: 'letters', action: 'create', description: 'Generate a letter for an employee' },
+  { module: 'letters', action: 'update', description: 'Edit / update a draft letter' },
+  { module: 'letters', action: 'send',   description: 'Send letter to candidate via email' },
+  { module: 'letters', action: 'delete', description: 'Delete a generated letter' },
+
+  // Hiring (candidate pipeline management)
+  { module: 'hiring', action: 'view',   description: 'View candidates in hiring pipeline' },
+  { module: 'hiring', action: 'create', description: 'Add candidate to hiring pipeline' },
+  { module: 'hiring', action: 'update', description: 'Update candidate hiring status' },
+  { module: 'hiring', action: 'delete', description: 'Remove a candidate from the pipeline' },
 ];
 
 // ─── Runner (idempotent — safe to call on every startup) ───────────────────────

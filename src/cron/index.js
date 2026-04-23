@@ -18,6 +18,7 @@ const { runJob } = require('./runner');
 
 const autoAbsentJob     = require('./jobs/autoAbsent.job');
 const documentExpiryJob = require('./jobs/documentExpiry.job');
+const leaveResetJob     = require('./jobs/leaveReset.job');
 
 const registerCronJobs = () => {
   // ─── Auto-Absent: every hour at minute 0 ────────────────────────────────────
@@ -29,6 +30,14 @@ const registerCronJobs = () => {
   // ─── Document Expiry: daily at midnight UTC ────────────────────────────────
   cron.schedule('0 0 * * *', () => {
     runJob('document-expiry', documentExpiryJob.run);
+  }, { runOnInit: false });
+
+  // ─── Leave Balance Reset: daily at 00:05 UTC ──────────────────────────────
+  // 5-min offset avoids collision with document-expiry job.
+  // DB-driven: checks if current year's balances exist → resets only when needed.
+  // Server-down safe: catches up on next run automatically.
+  cron.schedule('5 0 * * *', () => {
+    runJob('leave-reset', leaveResetJob.run);
   }, { runOnInit: false });
 
   console.log('[Cron] All cron jobs registered.');

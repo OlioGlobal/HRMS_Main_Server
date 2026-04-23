@@ -56,4 +56,22 @@ router.get('/:id/reportees',
   ctrl.getReportees
 );
 
+// Enable portal access
+router.post('/:id/enable-portal',
+  authenticate, authorize('employees', 'update'),
+  ctrl.enablePortalAccess
+);
+
+// Auto-assign next employee ID if missing
+router.post('/:id/assign-employee-id',
+  authenticate, authorize('employees', 'update'),
+  ctrl.assignEmployeeId
+);
+
+// HR verify candidate personal details
+router.patch('/:id/verify-personal-details',
+  authenticate, authorize('employees', 'update'),
+  ctrl.verifyPersonalDetails
+);
+
 module.exports = router;

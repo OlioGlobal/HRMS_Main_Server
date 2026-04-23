@@ -22,6 +22,9 @@ router.post(  '/types',     authenticate, authorize('document_types', 'create'),
 router.patch( '/types/:id', authenticate, authorize('document_types', 'update'), v.updateDocumentType, docTypeCtrl.update);
 router.delete('/types/:id', authenticate, authorize('document_types', 'delete'), docTypeCtrl.remove);
 
+// ─── Pre-boarding document upload (public — authenticated via token) ────────
+router.post('/employee/upload-preboarding', upload.single('file'), empDocCtrl.uploadPreboarding);
+
 // ─── Employee Documents (self-service) ──────────────────────────────────────
 router.get(   '/my',                 authenticate, authorize('documents', 'view'),   empDocCtrl.myDocuments);
 router.get(   '/my/checklist',       authenticate, authorize('documents', 'view'),   empDocCtrl.myChecklist);

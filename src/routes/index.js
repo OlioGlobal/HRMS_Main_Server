@@ -24,6 +24,11 @@ const dashboardRoutes      = require('./dashboard/dashboard.routes');
 const notificationRoutes   = require('./notification/notification.routes');
 const reimbursementRoutes  = require('./reimbursement/reimbursement.routes');
 const emailActionRoutes    = require('./emailActions.routes');
+const letterTemplateRoutes = require('./letters/letterTemplate.routes');
+const hiringPipelineRoutes = require('./letters/hiringPipeline.routes');
+const generatedLetterRoutes= require('./letters/generatedLetter.routes');
+const preboardingRoutes    = require('./preboarding/preboarding.routes');
+const candidateRoutes      = require('./hiring/candidates.routes');
 
 // ─── Mount All Routes ──────────────────────────────────────────────────────────
 router.use('/auth',          authRoutes);
@@ -48,6 +53,11 @@ router.use('/wfh-requests',   wfhRoutes);
 router.use('/dashboard',      dashboardRoutes);
 router.use('/notifications',  notificationRoutes);
 router.use('/reimbursements', reimbursementRoutes);
-router.use('/email-actions',  emailActionRoutes);
+router.use('/email-actions',      emailActionRoutes);
+router.use('/letter-templates',   letterTemplateRoutes);
+router.use('/hiring-pipelines',   hiringPipelineRoutes);
+router.use('/letters',            generatedLetterRoutes);
+router.use('/preboarding',        preboardingRoutes);
+router.use('/hiring/candidates',  candidateRoutes);
 
 module.exports = router;

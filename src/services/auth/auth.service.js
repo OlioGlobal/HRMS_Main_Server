@@ -11,7 +11,9 @@ const { seedDefaultLeaveTypes }     = require('../../seeders/leaveTypes.seeder')
 const { seedDefaultLeaveTemplates } = require('../../seeders/leaveTemplates.seeder');
 const { seedDefaultDocumentTypes }  = require('../../seeders/documentTypes.seeder');
 const { seedDefaultNotificationRules } = require('../../seeders/notificationRules.seeder');
-const { seedDefaultExpenseCategories } = require('../../seeders/expenseCategories.seeder');
+const { seedDefaultExpenseCategories }   = require('../../seeders/expenseCategories.seeder');
+const { seedDefaultLetterTemplates }     = require('../../seeders/letterTemplates.seeder');
+const { seedDefaultHiringPipeline }      = require('../../seeders/hiringPipeline.seeder');
 const {
   generateAccessToken,
   generateRefreshToken,
@@ -60,6 +62,12 @@ const signup = async ({ companyName, email, password, firstName, lastName, phone
 
   // Seed default expense categories
   await seedDefaultExpenseCategories(company._id);
+
+  // Seed default letter templates (offer, appointment, experience, increment, relieving)
+  await seedDefaultLetterTemplates(company._id);
+
+  // Seed default hiring pipeline (Standard Hiring: Applied → Offered → Accepted)
+  await seedDefaultHiringPipeline(company._id);
 
   // Auto-assign Super Admin role to the first user of this company
   await UserRole.create({

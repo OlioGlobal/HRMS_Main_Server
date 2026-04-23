@@ -20,7 +20,7 @@ const toNoonUTC = (dateStr) => {
 // Generate next employeeId for company (EMP001, EMP002, …)
 async function _generateEmployeeId(companyId) {
   const last = await Employee
-    .findOne({ company_id: companyId })
+    .findOne({ company_id: companyId, employeeId: { $ne: null } })
     .sort({ createdAt: -1 })
     .select('employeeId')
     .lean();
@@ -62,11 +62,16 @@ async function _scopeFilter(companyId, scope, requestingUserId) {
 const listEmployees = async (companyId, filters = {}, scope = 'global', requestingUserId) => {
   const scopeCondition = await _scopeFilter(companyId, scope, requestingUserId);
 
+  const EMPLOYEE_STATUSES = ['active', 'inactive', 'notice', 'terminated'];
   const query = { company_id: companyId, isActive: true, ...scopeCondition };
+
+  // Employees page never shows pre-hire candidates
+  query.status = filters.status
+    ? (EMPLOYEE_STATUSES.includes(filters.status) ? filters.status : { $in: EMPLOYEE_STATUSES })
+    : { $in: EMPLOYEE_STATUSES };
 
   if (filters.department_id) query.department_id = filters.department_id;
   if (filters.location_id)   query.location_id   = filters.location_id;
-  if (filters.status)        query.status        = filters.status;
   if (filters.search) {
     const re = { $regex: filters.search, $options: 'i' };
     query.$or = [
@@ -284,6 +289,13 @@ const updateEmployee = async (companyId, id, body) => {
     }
   }
 
+  // Allow setting employeeId only if not already assigned
+  if (body.employeeId && !employee.employeeId) {
+    const conflict = await Employee.findOne({ company_id: companyId, employeeId: body.employeeId, _id: { $ne: id } });
+    if (conflict) throw new AppError('Employee ID already in use.', 409);
+    employee.employeeId = body.employeeId.trim().toUpperCase();
+  }
+
   // addresses is an array — replace entirely if provided
   if (body.addresses) {
     employee.addresses = body.addresses;
@@ -378,6 +390,44 @@ const updateProbation = async (companyId, id, body, reviewerId) => {
   return employee.toObject();
 };
 
+// ─── Auto-assign next employeeId if missing ────────────────────────────────────
+const assignEmployeeId = async (companyId, id) => {
+  const employee = await Employee.findOne({ _id: id, company_id: companyId, isActive: true });
+  if (!employee) throw new AppError('Employee not found.', 404);
+  if (employee.employeeId) throw new AppError('Employee ID already assigned.', 409);
+
+  const nextId = await _generateEmployeeId(companyId);
+  employee.employeeId = nextId;
+  await employee.save();
+  return employee.toObject();
+};
+
+// ─── Enable portal access ──────────────────────────────────────────────────────
+const enablePortalAccess = async (companyId, id, requestingUserId) => {
+  const employee = await Employee.findOne({ _id: id, company_id: companyId, isActive: true });
+  if (!employee) throw new AppError('Employee not found.', 404);
+  if (employee.user_id) throw new AppError('Portal access is already enabled.', 409);
+  if (!employee.email) throw new AppError('Employee must have an email address to enable portal access.', 400);
+
+  const existingUser = await User.findOne({ email: employee.email.toLowerCase(), company_id: companyId });
+  if (existingUser) throw new AppError('A portal account with this email already exists.', 409);
+
+  const tempPassword = _generateTempPassword();
+  const user = await User.create({
+    company_id: companyId,
+    firstName:  employee.firstName,
+    lastName:   employee.lastName,
+    email:      employee.email.toLowerCase(),
+    password:   tempPassword,
+    status:     'active',
+  });
+
+  employee.user_id = user._id;
+  await employee.save();
+
+  return { tempPassword };
+};
+
 // ─── Get reportees ─────────────────────────────────────────────────────────────
 const getReportees = async (companyId, id) => {
   return Employee.find({
@@ -391,8 +441,19 @@ const getReportees = async (companyId, id) => {
     .lean({ virtuals: true });
 };
 
+const verifyPersonalDetails = async (companyId, id, verifiedBy) => {
+  const employee = await Employee.findOneAndUpdate(
+    { _id: id, company_id: companyId },
+    { $set: { personalDetailsVerifiedAt: new Date(), personalDetailsVerifiedBy: verifiedBy } },
+    { new: true }
+  ).lean();
+  if (!employee) throw new AppError('Employee not found.', 404);
+  return employee;
+};
+
 module.exports = {
   listEmployees, getEmployee, createEmployee,
   updateEmployee, changeStatus, deleteEmployee,
-  updateProbation, getReportees,
+  updateProbation, getReportees, enablePortalAccess, assignEmployeeId,
+  verifyPersonalDetails,
 };

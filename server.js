@@ -7,6 +7,8 @@ const { runPermissionsSeeder }       = require('./src/seeders/permissions.seeder
 const { seedDefaultRoles }           = require('./src/seeders/defaultRoles.seeder');
 const Company                        = require('./src/models/Company');
 const { registerNotificationJobs }  = require('./src/services/ruleEngine/registerJobs');
+const { seedDefaultHiringPipeline } = require('./src/seeders/hiringPipeline.seeder');
+const { seedDefaultLetterTemplates } = require('./src/seeders/letterTemplates.seeder');
 
 const PORT = process.env.PORT || 5000;
 
@@ -22,6 +24,8 @@ const startServer = async () => {
   const companies = await Company.find({}, '_id').lean();
   for (const c of companies) {
     await seedDefaultRoles(c._id);
+    await seedDefaultLetterTemplates(c._id);
+    await seedDefaultHiringPipeline(c._id);
   }
   if (companies.length) {
     console.log(`[Seeder] Synced default role-permissions for ${companies.length} company(ies).`);

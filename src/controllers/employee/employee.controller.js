@@ -68,8 +68,28 @@ const getReportees = catchAsync(async (req, res) => {
   sendSuccess(res, { data: { reportees } });
 });
 
+const enablePortalAccess = catchAsync(async (req, res) => {
+  const { tempPassword } = await svc.enablePortalAccess(
+    req.user.companyId,
+    req.params.id,
+    req.user.userId,
+  );
+  sendSuccess(res, { message: 'Portal access enabled.', data: { tempPassword } });
+});
+
+const assignEmployeeId = catchAsync(async (req, res) => {
+  const employee = await svc.assignEmployeeId(req.user.companyId, req.params.id);
+  sendSuccess(res, { message: 'Employee ID assigned.', data: { employee } });
+});
+
+const verifyPersonalDetails = catchAsync(async (req, res) => {
+  const employee = await svc.verifyPersonalDetails(req.user.companyId, req.params.id, req.user.userId);
+  sendSuccess(res, { message: 'Personal details verified.', data: { employee } });
+});
+
 module.exports = {
   listEmployees, getEmployee, createEmployee,
   updateEmployee, changeStatus, deleteEmployee,
-  updateProbation, getReportees,
+  updateProbation, getReportees, enablePortalAccess, assignEmployeeId,
+  verifyPersonalDetails,
 };

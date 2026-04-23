@@ -192,6 +192,27 @@ const ROLE_DEFINITIONS = {
       { key: 'expense_categories:create', scope: 'global' },
       { key: 'expense_categories:update', scope: 'global' },
       { key: 'expense_categories:delete', scope: 'global' },
+      // Hiring
+      { key: 'hiring:view',   scope: 'global' },
+      { key: 'hiring:create', scope: 'global' },
+      { key: 'hiring:update', scope: 'global' },
+      { key: 'hiring:delete', scope: 'global' },
+      // Hiring Pipelines
+      { key: 'hiring_pipelines:view',   scope: 'global' },
+      { key: 'hiring_pipelines:create', scope: 'global' },
+      { key: 'hiring_pipelines:update', scope: 'global' },
+      { key: 'hiring_pipelines:delete', scope: 'global' },
+      // Letter Templates
+      { key: 'letter_templates:view',   scope: 'global' },
+      { key: 'letter_templates:create', scope: 'global' },
+      { key: 'letter_templates:update', scope: 'global' },
+      { key: 'letter_templates:delete', scope: 'global' },
+      // Generated Letters
+      { key: 'letters:view',   scope: 'global' },
+      { key: 'letters:create', scope: 'global' },
+      { key: 'letters:update', scope: 'global' },
+      { key: 'letters:send',   scope: 'global' },
+      { key: 'letters:delete', scope: 'global' },
     ],
   },
 
@@ -279,6 +300,84 @@ const ROLE_DEFINITIONS = {
       { key: 'reimbursements:create',  scope: 'department' },
       // Expense Categories — view only
       { key: 'expense_categories:view', scope: 'department' },
+      // Hiring
+      { key: 'hiring:view',   scope: 'global' },
+      { key: 'hiring:create', scope: 'global' },
+      { key: 'hiring:update', scope: 'global' },
+      // Hiring Pipelines — view only
+      { key: 'hiring_pipelines:view', scope: 'global' },
+      // Letter Templates — view only
+      { key: 'letter_templates:view', scope: 'global' },
+      // Generated Letters
+      { key: 'letters:view',   scope: 'global' },
+      { key: 'letters:create', scope: 'global' },
+      { key: 'letters:update', scope: 'global' },
+      { key: 'letters:send',   scope: 'global' },
+    ],
+  },
+
+  'accounts': {
+    name:        'Accounts',
+    description: 'Finance and payroll team — manage salary, payroll, reimbursements and financial reporting',
+    level:       3,
+    permissions: [
+      { key: 'dashboard:view',               scope: 'global' },
+      // Employees — view only (needed for payroll processing)
+      { key: 'employees:view',               scope: 'global' },
+      // Attendance & Leave — view only (for payroll deductions)
+      { key: 'attendance:view',              scope: 'global' },
+      { key: 'leave_balances:view',          scope: 'global' },
+      { key: 'leave_requests:view',          scope: 'global' },
+      { key: 'holidays:view',                scope: 'global' },
+      // Salary — full management
+      { key: 'salary_components:view',       scope: 'global' },
+      { key: 'salary_components:create',     scope: 'global' },
+      { key: 'salary_components:update',     scope: 'global' },
+      { key: 'salary_components:delete',     scope: 'global' },
+      { key: 'salary_grades:view',           scope: 'global' },
+      { key: 'salary_grades:create',         scope: 'global' },
+      { key: 'salary_grades:update',         scope: 'global' },
+      { key: 'salary_grades:delete',         scope: 'global' },
+      { key: 'salary_templates:view',        scope: 'global' },
+      { key: 'salary_templates:create',      scope: 'global' },
+      { key: 'salary_templates:update',      scope: 'global' },
+      { key: 'salary_templates:delete',      scope: 'global' },
+      { key: 'employee_salary:view',         scope: 'global' },
+      { key: 'employee_salary:create',       scope: 'global' },
+      { key: 'employee_salary:update',       scope: 'global' },
+      // Payroll — full access
+      { key: 'payroll:view',                 scope: 'global' },
+      { key: 'payroll:create',               scope: 'global' },
+      { key: 'payroll:update',               scope: 'global' },
+      { key: 'payroll:delete',               scope: 'global' },
+      { key: 'payroll:approve',              scope: 'global' },
+      { key: 'payroll:export',               scope: 'global' },
+      { key: 'payslips:view',                scope: 'global' },
+      { key: 'payslips:export',              scope: 'global' },
+      // Reimbursements — full management
+      { key: 'reimbursements:view',          scope: 'global' },
+      { key: 'reimbursements:create',        scope: 'global' },
+      { key: 'reimbursements:update',        scope: 'global' },
+      { key: 'reimbursements:delete',        scope: 'global' },
+      { key: 'reimbursements:approve',       scope: 'global' },
+      { key: 'reimbursements:reject',        scope: 'global' },
+      { key: 'expense_categories:view',      scope: 'global' },
+      { key: 'expense_categories:create',    scope: 'global' },
+      { key: 'expense_categories:update',    scope: 'global' },
+      { key: 'expense_categories:delete',    scope: 'global' },
+      // Documents — own only
+      { key: 'documents:view',               scope: 'self' },
+      { key: 'documents:create',             scope: 'self' },
+      // Policy Documents — view
+      { key: 'policy_documents:view',        scope: 'global' },
+      { key: 'policy_acknowledgements:view', scope: 'self' },
+      { key: 'policy_acknowledgements:create', scope: 'self' },
+      // Reports & Notifications
+      { key: 'reports:view',                 scope: 'global' },
+      { key: 'reports:export',               scope: 'global' },
+      { key: 'notifications:view',           scope: 'self' },
+      // Audit Logs — view for financial audit
+      { key: 'audit_logs:view',              scope: 'global' },
     ],
   },
 

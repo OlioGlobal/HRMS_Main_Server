@@ -25,6 +25,12 @@ const companySchema = new mongoose.Schema(
     phone:   { type: String, default: null },
     website: { type: String, default: null },
     logo:    { type: String, default: null },
+    llpin:   { type: String, default: null },
+    gstin:   { type: String, default: null },
+    address: { type: String, default: null },
+    city:    { type: String, default: null },
+    state:   { type: String, default: null },
+    pincode: { type: String, default: null },
     plan: {
       type: String,
       enum: ['free', 'starter', 'professional', 'enterprise'],

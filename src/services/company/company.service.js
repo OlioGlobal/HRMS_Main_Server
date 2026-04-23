@@ -20,7 +20,7 @@ const getCompany = async (companyId) => {
 
 // ─── Update company settings ───────────────────────────────────────────────────
 const updateCompany = async (companyId, body) => {
-  const allowed = ['name', 'website', 'phone', 'settings'];
+  const allowed = ['name', 'website', 'phone', 'llpin', 'gstin', 'address', 'city', 'state', 'pincode', 'settings'];
   const update  = {};
 
   for (const key of allowed) {

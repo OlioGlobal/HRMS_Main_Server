@@ -12,7 +12,8 @@ router.post('/forgot-password',                  controller.forgotPassword);
 router.post('/reset-password',                   controller.resetPassword);
 
 // Protected
-router.post('/logout', authenticate, controller.logout);
-router.get('/me',      authenticate, controller.getMe);
+router.post('/logout',     authenticate, controller.logout);
+router.get('/me',          authenticate, controller.getMe);
+router.patch('/preference', authenticate, controller.updatePreference);
 
 module.exports = router;

@@ -9,10 +9,10 @@ const employeeSchema = new mongoose.Schema(
       index:    true,
     },
 
-    // Auto-generated ID per company (EMP001, EMP002, …)
+    // Auto-generated ID per company (EMP001, EMP002, …); null until candidate is activated
     employeeId: {
       type:     String,
-      required: true,
+      default:  null,
       trim:     true,
     },
 
@@ -52,7 +52,10 @@ const employeeSchema = new mongoose.Schema(
     avatar: { type: String, default: null },
 
     // ─── Job ────────────────────────────────────────────────────────────────────
-    joiningDate: { type: Date, required: true },
+    joiningDate: { type: Date, default: null },
+
+    // Rough monthly gross estimate — used for pre-join offer letter before salary is set
+    roughGross: { type: Number, default: null },
 
     employmentType: {
       type:    String,
@@ -124,9 +127,45 @@ const employeeSchema = new mongoose.Schema(
     // ─── Status ─────────────────────────────────────────────────────────────────
     status: {
       type:    String,
-      enum:    ['active', 'inactive', 'notice', 'terminated'],
+      enum:    ['pre_join', 'offered', 'accepted', 'active', 'inactive', 'notice', 'terminated'],
       default: 'active',
     },
+
+    // ─── Hiring Pipeline ────────────────────────────────────────────────────────
+    pipeline_id: {
+      type:    mongoose.Schema.Types.ObjectId,
+      ref:     'HiringPipeline',
+      default: null,
+    },
+    pipelineCurrentStep: { type: Number, default: 0 },
+
+    // HR staff assigned to manage this candidate through hiring
+    assignedHr_id: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+
+    // ─── Pre-Boarding Portal ────────────────────────────────────────────────────
+    // personalEmail used to send portal link before work email is assigned
+    personalEmail:         { type: String, lowercase: true, trim: true, default: null },
+    preBoardingToken:      { type: String, default: null },
+    preBoardingTokenExpiry:{ type: Date,   default: null },
+
+    // Bank details — filled by candidate on pre-boarding portal
+    bankDetails: {
+      bankName:      { type: String, default: null },
+      accountNumber: { type: String, default: null },
+      ifscCode:      { type: String, default: null },
+      accountType:   { type: String, enum: ['savings', 'current', null], default: null },
+    },
+
+    // HR verification of candidate-submitted personal details
+    personalDetailsVerifiedAt: { type: Date,                              default: null },
+    personalDetailsVerifiedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+
+    // HR override — marks pre-boarding complete even if some docs are missing/pending
+    preboardingOverriddenAt: { type: Date,                              default: null },
+    preboardingOverriddenBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+
+    // Notice period in days — used in letters
+    noticePeriodDays: { type: Number, default: null },
 
     // ─── Onboarding ───────────────────────────────────────────────────────────
     onboardingCompleted:   { type: Boolean, default: false },
@@ -141,7 +180,6 @@ const employeeSchema = new mongoose.Schema(
     offboardingCompletedAt:  { type: Date,    default: null },
 
     // ─── Portal access ──────────────────────────────────────────────────────────
-    // null = no portal login; set when Step 3 is submitted
     user_id: {
       type:    mongoose.Schema.Types.ObjectId,
       ref:     'User',
@@ -153,8 +191,8 @@ const employeeSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-// Unique employeeId per company
-employeeSchema.index({ company_id: 1, employeeId: 1 }, { unique: true });
+// Unique employeeId per company — only index non-null string values (candidates have null)
+employeeSchema.index({ company_id: 1, employeeId: 1 }, { unique: true, partialFilterExpression: { employeeId: { $type: 'string' } } });
 // Quick lookups by status and department
 employeeSchema.index({ company_id: 1, status: 1 });
 employeeSchema.index({ company_id: 1, department_id: 1 });
