@@ -11,7 +11,7 @@ const salarySnapshotComponentSchema = new mongoose.Schema(
     type:     { type: String, enum: ['earning', 'deduction'], required: true },
     calcType: { type: String, enum: ['fixed', 'percentage', 'percentOfCTC'], required: true },
     value:    { type: Number, required: true, min: 0 },
-    monthlyAmount: { type: Number, required: true },
+    monthlyAmount: { type: mongoose.Schema.Types.Mixed },
   },
   { _id: false }
 );
@@ -54,16 +54,8 @@ const employeeSalarySchema = new mongoose.Schema(
       type: [salarySnapshotComponentSchema],
       default: [],
     },
-    ctcMonthly: {
-      type: Number,
-      required: true,
-      min: 0,
-    },
-    ctcAnnual: {
-      type: Number,
-      required: true,
-      min: 0,
-    },
+    ctcMonthly: { type: mongoose.Schema.Types.Mixed },
+    ctcAnnual:  { type: mongoose.Schema.Types.Mixed },
     status: {
       type: String,
       enum: ['active', 'superseded'],

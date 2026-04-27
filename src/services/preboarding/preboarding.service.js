@@ -6,6 +6,7 @@ const EmployeeDocument      = require('../../models/EmployeeDocument');
 const DocumentType          = require('../../models/DocumentType');
 const AppError              = require('../../utils/AppError');
 const { sendEmail }         = require('../../utils/email');
+const { encryptBankDetails, decryptBankDetails } = require('../../utils/encryption');
 
 // ─── Shared branded email builder ─────────────────────────────────────────────
 const _buildHrNotificationEmail = ({ companyName, hrName, candidateName, designation, joiningDate, action, details, hrmsLink }) => `
@@ -77,6 +78,7 @@ const getEmployeeByToken = async (token) => {
     .lean();
 
   if (!employee) throw new AppError('Invalid or expired pre-boarding link.', 401);
+  if (employee.bankDetails) employee.bankDetails = decryptBankDetails(employee.bankDetails);
   return employee;
 };
 
@@ -271,7 +273,7 @@ const savePersonalDetails = async (token, body) => {
   if (body.dateOfBirth)     updates.dateOfBirth     = body.dateOfBirth;
   if (body.gender)          updates.gender          = body.gender;
   if (body.phone)           updates.phone           = body.phone;
-  if (body.bankDetails)     updates.bankDetails     = body.bankDetails;
+  if (body.bankDetails)     updates.bankDetails     = encryptBankDetails(body.bankDetails);
   if (body.emergencyContact)updates.emergencyContact = body.emergencyContact;
   if (body.address) {
     updates.addresses = [{ ...body.address, isPrimary: true, label: 'home' }];
@@ -286,6 +288,7 @@ const savePersonalDetails = async (token, body) => {
     'Details include: contact info, home address, emergency contact, and bank details.'
   );
 
+  if (updated?.bankDetails) updated.bankDetails = decryptBankDetails(updated.bankDetails);
   return updated;
 };
 

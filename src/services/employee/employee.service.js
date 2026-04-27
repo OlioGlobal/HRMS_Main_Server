@@ -6,6 +6,7 @@ const LeaveTemplate = require('../../models/LeaveTemplate');
 const LeaveBalance  = require('../../models/LeaveBalance');
 const AppError      = require('../../utils/AppError');
 const { calculateProRatedDays } = require('../../utils/calculateLeaveDays');
+const { decryptBankDetails } = require('../../utils/encryption');
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -94,6 +95,7 @@ const listEmployees = async (companyId, filters = {}, scope = 'global', requesti
       .populate('workPolicy_id',      'name')
       .populate('designation_id',      'name level')
       .populate('reportingManager_id','firstName lastName employeeId avatar')
+      .select('-bankDetails')
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit)
@@ -116,6 +118,7 @@ const getEmployee = async (companyId, id) => {
     .lean({ virtuals: true });
 
   if (!employee) throw new AppError('Employee not found.', 404);
+  if (employee.bankDetails) employee.bankDetails = decryptBankDetails(employee.bankDetails);
   return employee;
 };
 

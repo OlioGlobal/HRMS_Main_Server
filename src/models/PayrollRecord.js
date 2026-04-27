@@ -6,7 +6,7 @@ const componentLineSchema = new mongoose.Schema(
     name:     { type: String, required: true },
     calcType: { type: String, enum: ['fixed', 'percentage', 'percentOfCTC'], required: true },
     value:    { type: Number, required: true },
-    amount:   { type: Number, required: true },
+    amount:   { type: mongoose.Schema.Types.Mixed },
   },
   { _id: false }
 );
@@ -51,31 +51,31 @@ const payrollRecordSchema = new mongoose.Schema(
       ref: 'EmployeeSalary',
       default: null,
     },
-    ctcMonthly: { type: Number, default: 0 },
+    ctcMonthly: { type: mongoose.Schema.Types.Mixed, default: 0 },
 
     earnings:   { type: [componentLineSchema], default: [] },
     deductions: { type: [componentLineSchema], default: [] },
 
     // ─── Calculated ─────────────────────────────────────────────────────────────
-    perDaySalary:  { type: Number, default: 0 },
-    perHourSalary: { type: Number, default: 0 },
+    perDaySalary:  { type: mongoose.Schema.Types.Mixed, default: 0 },
+    perHourSalary: { type: mongoose.Schema.Types.Mixed, default: 0 },
 
-    lwpDeductionAmount:    { type: Number, default: 0 },
-    absentDeductionAmount: { type: Number, default: 0 },
-    halfDayDeductionAmount:{ type: Number, default: 0 },
-    lateDeductionAmount:   { type: Number, default: 0 },
-    overtimeAmount:        { type: Number, default: 0 },
+    lwpDeductionAmount:     { type: mongoose.Schema.Types.Mixed, default: 0 },
+    absentDeductionAmount:  { type: mongoose.Schema.Types.Mixed, default: 0 },
+    halfDayDeductionAmount: { type: mongoose.Schema.Types.Mixed, default: 0 },
+    lateDeductionAmount:    { type: mongoose.Schema.Types.Mixed, default: 0 },
+    overtimeAmount:         { type: mongoose.Schema.Types.Mixed, default: 0 },
 
-    grossEarnings:   { type: Number, default: 0 },
-    totalDeductions: { type: Number, default: 0 },
-    netPay:          { type: Number, default: 0 },
+    grossEarnings:   { type: mongoose.Schema.Types.Mixed, default: 0 },
+    totalDeductions: { type: mongoose.Schema.Types.Mixed, default: 0 },
+    netPay:          { type: mongoose.Schema.Types.Mixed, default: 0 },
 
     // ─── Comp-off tracking ──────────────────────────────────────────────────────
     compOffHoursEarned: { type: Number, default: 0 },
     compOffCredited:    { type: Boolean, default: false },
 
     // ─── Reimbursements (non-taxable, added directly to netPay) ────────────────
-    reimbursementTotal: { type: Number, default: 0 },
+    reimbursementTotal: { type: mongoose.Schema.Types.Mixed, default: 0 },
     reimbursements: [{
       reimbursement_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Reimbursement' },
       description: { type: String },

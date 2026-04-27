@@ -2,6 +2,7 @@ const EmployeeSalary  = require('../../models/EmployeeSalary');
 const SalaryGrade     = require('../../models/SalaryGrade');
 const SalaryComponent = require('../../models/SalaryComponent');
 const AppError        = require('../../utils/AppError');
+const { encryptSalaryDoc, decryptSalaryDoc } = require('../../utils/encryption');
 
 // ─── Helper: resolve components to snapshot ───────────────────────────────────
 // targetCtcAnnual: optional — if provided, Basic is derived from CTC and a
@@ -110,11 +111,12 @@ const buildSnapshot = async (companyId, components, targetCtcAnnual = null) => {
 
 // ─── List salary records for an employee ──────────────────────────────────────
 const listForEmployee = async (companyId, employeeId) => {
-  return EmployeeSalary.find({ company_id: companyId, employee_id: employeeId })
+  const records = await EmployeeSalary.find({ company_id: companyId, employee_id: employeeId })
     .populate('salaryGrade_id', 'name')
     .populate('createdBy', 'firstName lastName')
     .sort({ effectiveDate: -1 })
     .lean();
+  return records.map(decryptSalaryDoc);
 };
 
 // ─── Get active salary ────────────────────────────────────────────────────────
@@ -127,7 +129,7 @@ const getActiveSalary = async (companyId, employeeId) => {
     .populate('salaryGrade_id', 'name')
     .populate('createdBy', 'firstName lastName')
     .lean();
-  return salary; // may be null (no salary assigned yet)
+  return salary ? decryptSalaryDoc(salary) : null;
 };
 
 // ─── Assign / Revise salary ──────────────────────────────────────────────────
@@ -173,6 +175,9 @@ const assignSalary = async (companyId, employeeId, userId, body) => {
     { status: 'superseded' }
   );
 
+  // Encrypt sensitive fields before persisting
+  const encryptedDoc = encryptSalaryDoc({ ctcMonthly, ctcAnnual, components: snapshot });
+
   // Create new active salary record
   const salary = await EmployeeSalary.create({
     company_id:     companyId,
@@ -181,14 +186,14 @@ const assignSalary = async (companyId, employeeId, userId, body) => {
     salaryGrade_id: type === 'grade' ? salaryGrade_id : null,
     effectiveDate,
     reason:         reason || null,
-    components:     snapshot,
-    ctcMonthly,
-    ctcAnnual,
+    components:     encryptedDoc.components,
+    ctcMonthly:     encryptedDoc.ctcMonthly,
+    ctcAnnual:      encryptedDoc.ctcAnnual,
     status:         'active',
     createdBy:      userId,
   });
 
-  return salary.toObject();
+  return decryptSalaryDoc(salary.toObject());
 };
 
 module.exports = {

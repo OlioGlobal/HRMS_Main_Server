@@ -5,6 +5,7 @@ const Employee      = require('../../models/Employee');
 const AppError      = require('../../utils/AppError');
 const eventBus      = require('../../utils/eventBus');
 const { calculatePayrollRecord } = require('./calculatePayroll.service');
+const { encryptPayrollDoc, decryptPayrollDoc, decrypt } = require('../../utils/encryption');
 
 const toOid = (id) => new mongoose.Types.ObjectId(id);
 
@@ -90,17 +91,17 @@ const processRun = async (runId, companyId) => {
       if (recordData.status === 'warning') warningCount++;
     }
 
-    // Bulk insert new records
+    // Encrypt sensitive fields before bulk insert
     if (records.length > 0) {
-      await PayrollRecord.insertMany(records);
+      await PayrollRecord.insertMany(records.map(encryptPayrollDoc));
     }
 
-    // Include preserved records in totals
+    // Include preserved records in totals — decrypt before summing (they are already encrypted in DB)
     for (const pr of preservedRecords) {
       if (pr.status === 'skipped') continue;
-      totalGross      += pr.grossEarnings;
-      totalDeductions += pr.totalDeductions;
-      totalNetPay     += pr.netPay;
+      totalGross      += decrypt(pr.grossEarnings);
+      totalDeductions += decrypt(pr.totalDeductions);
+      totalNetPay     += decrypt(pr.netPay);
     }
     const allCount = records.length + preservedRecords.length;
 
@@ -341,7 +342,7 @@ const getRecords = async (runId, companyId, query = {}) => {
   const result = results[0] || { data: [], total: [] };
 
   return {
-    records: result.data,
+    records: result.data.map(decryptPayrollDoc),
     total: result.total[0]?.count || 0,
     page: Number(page),
     limit: Number(limit),
@@ -359,7 +360,7 @@ const getRecord = async (runId, employeeId, companyId) => {
     .lean();
 
   if (!record) throw new AppError('Payroll record not found.', 404);
-  return record;
+  return decryptPayrollDoc(record);
 };
 
 // ─── Manual edit ────────────────────────────────────────────────────────────
@@ -382,18 +383,27 @@ const editRecord = async (runId, employeeId, companyId, updates, userId) => {
 
   if (!record) throw new AppError('Payroll record not found.', 404);
 
-  // Allow editing specific fields
-  const editableFields = [
+  // Fields that stay as plain numbers (attendance counts, not financial)
+  const plainFields = [
     'daysWorked', 'halfDays', 'daysAbsent', 'lwpDays', 'lateCount',
     'deductibleLateCount', 'overtimeHours',
+  ];
+  // Fields that are encrypted (financial amounts stored as Mixed)
+  const encryptedFields = [
     'lwpDeductionAmount', 'absentDeductionAmount', 'halfDayDeductionAmount',
     'lateDeductionAmount', 'overtimeAmount',
     'grossEarnings', 'totalDeductions', 'netPay',
   ];
 
-  for (const field of editableFields) {
+  for (const field of plainFields) {
+    if (updates[field] !== undefined) record[field] = updates[field];
+  }
+
+  for (const field of encryptedFields) {
     if (updates[field] !== undefined) {
-      record[field] = updates[field];
+      const { encrypt } = require('../../utils/encryption');
+      record[field] = encrypt(updates[field]);
+      record.markModified(field); // required for Mongoose Mixed fields
     }
   }
 
@@ -452,8 +462,8 @@ const getMyPayslips = async (employeeId, companyId) => {
     .sort({ year: -1, month: -1 })
     .lean();
 
-  // Filter out records where run didn't match (not approved/paid)
-  return records.filter(r => r.payrollRun_id !== null);
+  // Filter out records where run didn't match (not approved/paid), then decrypt
+  return records.filter(r => r.payrollRun_id !== null).map(decryptPayrollDoc);
 };
 
 // ─── Helper: recalculate run totals ─────────────────────────────────────────
@@ -463,9 +473,10 @@ const recalcRunTotals = async (runId) => {
     status: { $ne: 'skipped' },
   }).lean();
 
-  const totalGross      = activeRecords.reduce((s, r) => s + r.grossEarnings, 0);
-  const totalDeductions = activeRecords.reduce((s, r) => s + r.totalDeductions, 0);
-  const totalNetPay     = activeRecords.reduce((s, r) => s + r.netPay, 0);
+  // decrypt() handles both plain numbers (legacy) and encrypted strings transparently
+  const totalGross      = activeRecords.reduce((s, r) => s + decrypt(r.grossEarnings), 0);
+  const totalDeductions = activeRecords.reduce((s, r) => s + decrypt(r.totalDeductions), 0);
+  const totalNetPay     = activeRecords.reduce((s, r) => s + decrypt(r.netPay), 0);
   const warningCount    = activeRecords.filter(r => r.status === 'warning').length;
 
   await PayrollRun.findByIdAndUpdate(runId, {
