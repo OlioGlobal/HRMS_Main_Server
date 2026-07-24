@@ -41,6 +41,25 @@ const todayDateUTC = () => {
 };
 
 /**
+ * Start of "today" in a given IANA timezone, returned as a UTC Date
+ * (midnight-UTC representing that local calendar day). Attendance dates are
+ * stored this way so each local day maps to exactly one record — regardless of
+ * clock time. Fixes early-morning (e.g. 12:02 AM IST) clock-ins landing on the
+ * previous UTC day.
+ */
+const dayStartInTZ = (tz = 'UTC') => {
+  const [y, m, d] = new Intl.DateTimeFormat('en-CA', {
+    timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit',
+  }).format(new Date()).split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d));
+};
+
+/** Day-of-week (SUN..SAT) in a given timezone. */
+const weekdayInTZ = (tz = 'UTC') =>
+  new Intl.DateTimeFormat('en-US', { timeZone: tz, weekday: 'short' })
+    .format(new Date()).toUpperCase().slice(0, 3);
+
+/**
  * Resolve the employee's timezone from their location (fallback: company timezone).
  */
 const resolveTimezone = async (employee) => {
@@ -59,7 +78,8 @@ const clockIn = async (companyId, userId, body) => {
   if (!employee) throw new AppError('No employee profile linked to your account.', 400);
   if (employee.status !== 'active') throw new AppError('Your employee profile is not active.', 400);
 
-  const today = todayDateUTC();
+  const tz    = await resolveTimezone(employee);
+  const today = dayStartInTZ(tz);
 
   // Check if already clocked in today
   const existing = await AttendanceRecord.findOne({
@@ -73,9 +93,8 @@ const clockIn = async (companyId, userId, body) => {
 
   const policy = await getWorkPolicy(employee);
 
-  // Check if today is a working day
-  const DAY_MAP = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
-  const dayName = DAY_MAP[today.getUTCDay()];
+  // Check if today is a working day (in the employee's timezone)
+  const dayName = weekdayInTZ(tz);
   if (!policy.workingDays.includes(dayName)) {
     throw new AppError('Today is not a working day as per your work policy.', 400);
   }
@@ -124,7 +143,6 @@ const clockIn = async (companyId, userId, body) => {
 
   const now  = new Date();
   const snap = snapshotPolicy(policy);
-  const tz   = await resolveTimezone(employee);
 
   if (existing) {
     // Record was created by cron (absent/holiday/on_leave) — update it
@@ -171,7 +189,8 @@ const clockOut = async (companyId, userId, body) => {
   const employee = await Employee.findOne({ user_id: userId, company_id: companyId }).lean();
   if (!employee) throw new AppError('No employee profile linked to your account.', 400);
 
-  const today = todayDateUTC();
+  const tz    = await resolveTimezone(employee);
+  const today = dayStartInTZ(tz);
 
   const record = await AttendanceRecord.findOne({
     company_id: companyId,
@@ -221,7 +240,6 @@ const clockOut = async (companyId, userId, body) => {
 
   // Recalculate status with full data
   const snap = record.workPolicySnapshot;
-  const tz   = await resolveTimezone(employee);
   const calc = calculateAttendanceStatus(record.clockInTime, now, snap, today, tz);
 
   record.status        = calc.status;
@@ -240,7 +258,8 @@ const getToday = async (companyId, userId) => {
   const employee = await Employee.findOne({ user_id: userId, company_id: companyId }).lean();
   if (!employee) throw new AppError('No employee profile linked to your account.', 400);
 
-  const today = todayDateUTC();
+  const tz    = await resolveTimezone(employee);
+  const today = dayStartInTZ(tz);
   const record = await AttendanceRecord.findOne({
     company_id: companyId,
     employee_id: employee._id,
