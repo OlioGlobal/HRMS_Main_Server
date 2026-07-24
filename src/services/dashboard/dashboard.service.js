@@ -270,7 +270,7 @@ const getDashboardStats = async (companyId, userId, scope) => {
 
 // ─── Birthday helper ──────────────────────────────────────────────────────────
 
-async function _getUpcomingBirthdays(companyId, from, to, limit) {
+async function _getUpcomingBirthdays(companyId, from, to, limit, extraMatch = {}) {
   const fromMonth = from.getMonth() + 1;
   const fromDay = from.getDate();
   const toMonth = to.getMonth() + 1;
@@ -291,7 +291,7 @@ async function _getUpcomingBirthdays(companyId, from, to, limit) {
   }
 
   return Employee.aggregate([
-    { $match: { company_id: toObjectId(companyId), status: { $in: ['active', 'notice'] }, dateOfBirth: { $ne: null } } },
+    { $match: { company_id: toObjectId(companyId), status: { $in: ['active', 'notice'] }, dateOfBirth: { $ne: null }, ...extraMatch } },
     { $addFields: { _birthMonth: { $month: '$dateOfBirth' }, _birthDay: { $dayOfMonth: '$dateOfBirth' } } },
     { $match: { $expr: dateMatch } },
     { $sort: { _birthMonth: 1, _birthDay: 1 } },
@@ -300,4 +300,38 @@ async function _getUpcomingBirthdays(companyId, from, to, limit) {
   ]);
 }
 
-module.exports = { getDashboardStats };
+// ─── Scoped upcoming birthdays (toggle: company | department | team | location | reportees) ──
+const SCOPE_FIELD = {
+  department: 'department_id',
+  team:       'team_id',
+  location:   'location_id',
+};
+
+const getUpcomingBirthdays = async (companyId, userId, scope = 'company', days = 7) => {
+  const today = startOfDay();
+  const window = Math.max(1, Math.min(Number(days) || 7, 60)); // clamp 1..60 days
+  const to = addDays(today, window);
+
+  let extraMatch = {};
+
+  if (scope && scope !== 'company') {
+    // Resolve the viewer's own employee record to read their dept/team/location
+    const emp = await Employee.findOne({ company_id: companyId, user_id: userId })
+      .select('_id department_id team_id location_id').lean();
+
+    if (emp) {
+      if (scope === 'reportees') {
+        extraMatch = { reportingManager_id: emp._id };
+      } else {
+        const field = SCOPE_FIELD[scope];
+        // Only apply the filter if the viewer actually has a value for that dimension;
+        // otherwise fall back to company-wide so nobody silently disappears.
+        if (field && emp[field]) extraMatch = { [field]: emp[field] };
+      }
+    }
+  }
+
+  return _getUpcomingBirthdays(companyId, today, to, 10, extraMatch);
+};
+
+module.exports = { getDashboardStats, getUpcomingBirthdays };

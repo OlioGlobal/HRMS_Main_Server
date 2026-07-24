@@ -76,6 +76,14 @@ const getMyPayslips = catchAsync(async (req, res) => {
 
 // ─── Payslips (HR — any employee) ───────────────────────────────────────────
 const getEmployeePayslips = catchAsync(async (req, res) => {
+  // Enforce permission scope: a 'self'-scoped grant may only read the caller's
+  // own payslips — never another employee's (prevents IDOR via employeeId).
+  if (req.permissionScope === 'self') {
+    const self = await Employee.findOne({ user_id: req.user.userId, company_id: req.user.companyId }).select('_id').lean();
+    if (!self || String(self._id) !== String(req.params.employeeId)) {
+      throw new AppError('You can only view your own payslips.', 403);
+    }
+  }
   const payslips = await payrollService.getMyPayslips(req.params.employeeId, req.user.companyId);
   sendSuccess(res, { data: { payslips } });
 });

@@ -40,4 +40,19 @@ const getStats = catchAsync(async (req, res) => {
   });
 });
 
-module.exports = { getStats };
+// GET /api/dashboard/birthdays?scope=company|department|team|location|reportees&days=7
+const getBirthdays = catchAsync(async (req, res) => {
+  const { companyId, userId } = req.user;
+  const scope = req.query.scope || 'company';
+  const days  = req.query.days;
+
+  const birthdays = await dashboardService.getUpcomingBirthdays(companyId, userId, scope, days);
+
+  sendSuccess(res, {
+    status:  200,
+    message: 'Upcoming birthdays fetched.',
+    data:    { birthdays },
+  });
+});
+
+module.exports = { getStats, getBirthdays };
