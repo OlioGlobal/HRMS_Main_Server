@@ -1,4 +1,5 @@
 const express      = require('express');
+const path         = require('path');
 const cors         = require('cors');
 const helmet       = require('helmet');
 const cookieParser = require('cookie-parser');
@@ -11,7 +12,12 @@ const errorHandler = require('./middleware/errorHandler');
 const app = express();
 
 // ─── Security Headers ──────────────────────────────────────────────────────────
-app.use(helmet());
+// crossOriginResourcePolicy relaxed so uploaded assets (logos, signatures) can be
+// loaded by the frontend on a different origin.
+app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
+
+// ─── Static uploads (logos, signatures) ─────────────────────────────────────────
+app.use('/uploads', express.static(path.join(process.cwd(), 'public', 'uploads')));
 
 // ─── CORS ─────────────────────────────────────────────────────────────────────
 const allowedOrigins = process.env.CLIENT_URL

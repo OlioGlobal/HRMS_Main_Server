@@ -8,9 +8,11 @@ const { initiateRunValidator, editRecordValidator } = require('../../validators/
 
 // ─── Payslips (Employee Self) ───────────────────────────────────────────────
 router.get('/payslips/me', authenticate, ctrl.getMyPayslips);
+router.get('/payslips/me/download', authenticate, ctrl.downloadMyPayslip);
 
 // ─── Payslips (HR — any employee) ──────────────────────────────────────────
 router.get('/payslips/employee/:employeeId', authenticate, authorize('payslips', 'view'), ctrl.getEmployeePayslips);
+router.get('/payslips/employee/:employeeId/download', authenticate, authorize('payslips', 'view'), ctrl.downloadEmployeePayslip);
 router.post('/payslips/employee/:employeeId/send-email', authenticate, authorize('payslips', 'view'), ctrl.sendPayslipEmail);
 
 // ─── Payroll Runs ───────────────────────────────────────────────────────────

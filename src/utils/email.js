@@ -21,7 +21,7 @@ const getTransporter = () => {
   return transporter;
 };
 
-const sendEmail = async ({ to, subject, html }) => {
+const sendEmail = async ({ to, subject, html, attachments }) => {
   const t = getTransporter();
   if (!t) return { success: false, error: 'Email not configured' };
 
@@ -31,6 +31,7 @@ const sendEmail = async ({ to, subject, html }) => {
       to,
       subject,
       html,
+      ...(attachments && attachments.length ? { attachments } : {}),
     });
     return { success: true, messageId: info.messageId };
   } catch (err) {

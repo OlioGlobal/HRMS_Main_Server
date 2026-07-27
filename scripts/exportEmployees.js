@@ -190,7 +190,7 @@ async function run() {
   legend.addRow({ status: 'Temp Password', meaning: 'Employee ID (e.g. OLIO-055). Ask employee to change after first login.' });
 
   // Save file
-  const outPath = path.join(__dirname, '..', '..', 'Olio_Employees_2026.xlsx');
+  const outPath = path.join(__dirname, '..', '..', 'Olio_Active_Employees_2026.xlsx');
   await wb.xlsx.writeFile(outPath);
 
   console.log(`\nExcel saved to: ${outPath}`);

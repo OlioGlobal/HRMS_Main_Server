@@ -24,6 +24,13 @@ const declineLetter = catchAsync(async (req, res) => {
   sendSuccess(res, { message: 'Offer declined.', data: { letter } });
 });
 
+const uploadSignedLetter = catchAsync(async (req, res) => {
+  const { token }    = req.query;
+  const { letterId } = req.body;
+  const letter = await svc.uploadSignedLetter(token, letterId, req.file);
+  sendSuccess(res, { status: 201, message: 'Signed copy uploaded. HR will review it shortly.', data: { letter } });
+});
+
 const acknowledgePolicy = catchAsync(async (req, res) => {
   const { token }    = req.query;
   const { policyId } = req.body;
@@ -37,4 +44,4 @@ const savePersonalDetails = catchAsync(async (req, res) => {
   sendSuccess(res, { message: 'Personal details saved.', data: { employee } });
 });
 
-module.exports = { getChecklist, acceptLetter, declineLetter, acknowledgePolicy, savePersonalDetails };
+module.exports = { getChecklist, acceptLetter, declineLetter, uploadSignedLetter, acknowledgePolicy, savePersonalDetails };

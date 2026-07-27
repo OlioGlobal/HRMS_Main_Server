@@ -42,4 +42,13 @@ const remove = catchAsync(async (req, res) => {
   sendSuccess(res, { message: 'Letter deleted.' });
 });
 
-module.exports = { list, getOne, generate, preview, buildPreview, updateDraft, send, remove };
+const reviewSigned = catchAsync(async (req, res) => {
+  const { action, note } = req.body;
+  const letter = await svc.reviewSignedLetter(req.user.companyId, req.params.id, req.user.id, { action, note });
+  sendSuccess(res, {
+    message: action === 'approve' ? 'Signed letter confirmed.' : 'Sent back to candidate for re-upload.',
+    data: { letter },
+  });
+});
+
+module.exports = { list, getOne, generate, preview, buildPreview, updateDraft, send, reviewSigned, remove };

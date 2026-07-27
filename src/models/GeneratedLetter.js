@@ -41,7 +41,8 @@ const generatedLetterSchema = new mongoose.Schema(
 
     status: {
       type:    String,
-      enum:    ['draft', 'sent', 'accepted', 'declined'],
+      // draft → sent → signed_uploaded → accepted (HR confirmed) / declined
+      enum:    ['draft', 'sent', 'signed_uploaded', 'accepted', 'declined'],
       default: 'draft',
     },
 
@@ -52,6 +53,18 @@ const generatedLetterSchema = new mongoose.Schema(
     acceptComment:      { type: String, default: null },
     declinedAt:         { type: Date,   default: null },
     declineReason:      { type: String, default: null },
+
+    // ─── Signed copy (candidate downloads PDF, signs, uploads back) ─────────────
+    signedFileKey:    { type: String, default: null }, // B2 object key
+    signedFileName:   { type: String, default: null },
+    signedFileSize:   { type: Number, default: null },
+    signedMimeType:   { type: String, default: null },
+    signedUploadedAt: { type: Date,   default: null },
+
+    // ─── HR review of the uploaded signed copy ──────────────────────────────────
+    reviewedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+    reviewedAt: { type: Date,   default: null },
+    reviewNote: { type: String, default: null }, // e.g. reason shown to candidate on reject
 
     sentAt:      { type: Date,   default: null },
     generatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },

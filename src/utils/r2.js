@@ -60,6 +60,13 @@ const buildPolicyDocKey = (companyId, category, fileName) => {
   return `companies/${companyId}/policies/${category}/${Date.now()}_${safe}`;
 };
 
+// ─── Build file key for generated letters (system PDF + candidate signed copy) ─
+const buildLetterKey = (companyId, letterId, kind, fileName) => {
+  const safe = String(fileName).replace(/[^a-zA-Z0-9._-]/g, '_');
+  // kind: 'system' (generated PDF) | 'signed' (candidate upload)
+  return `companies/${companyId}/letters/${letterId}/${kind}/${Date.now()}_${safe}`;
+};
+
 module.exports = {
   b2Client,
   uploadToB2,
@@ -67,4 +74,5 @@ module.exports = {
   deleteFromR2,
   buildEmployeeDocKey,
   buildPolicyDocKey,
+  buildLetterKey,
 };

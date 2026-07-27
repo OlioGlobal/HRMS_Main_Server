@@ -61,6 +61,19 @@ const companySchema = new mongoose.Schema(
         lastResetDate:        { type: Date, default: null },
         nextResetDate:        { type: Date, default: null },
       },
+      // ─── Payslip / salary-slip config ─────────────────────────────────────
+      payslip: {
+        title:                 { type: String, default: 'PAY SLIP' },
+        logo:                  { type: String, default: null },      // /uploads/payslip-logos/… — overrides company logo on the slip
+        footerText:            { type: String, default: 'This is a computer-generated payslip' },
+        signatoryName:         { type: String, default: '' },
+        signatoryLabel:        { type: String, default: 'Authorized Signatory' },
+        signatureImage:        { type: String, default: null },   // /uploads/signatures/…
+        showLogo:              { type: Boolean, default: true },
+        showWatermark:         { type: Boolean, default: true },
+        watermarkText:         { type: String, default: '' },     // '' → falls back to company name
+        showEmployeeSignature: { type: Boolean, default: true },
+      },
     },
     isActive: { type: Boolean, default: true },
   },

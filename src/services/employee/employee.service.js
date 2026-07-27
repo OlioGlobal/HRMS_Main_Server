@@ -122,6 +122,16 @@ const getEmployee = async (companyId, id) => {
   return employee;
 };
 
+// ─── Get the requesting user's own employee record ───────────────────────────────
+const getMyEmployee = async (companyId, userId) => {
+  const self = await Employee
+    .findOne({ company_id: companyId, user_id: userId, isActive: true })
+    .select('_id')
+    .lean();
+  if (!self) throw new AppError('No employee profile is linked to your account.', 404);
+  return getEmployee(companyId, self._id);
+};
+
 // ─── Create employee ───────────────────────────────────────────────────────────
 const createEmployee = async (companyId, body, requestingUserId) => {
   // Auto-generate or use provided employeeId
@@ -455,7 +465,7 @@ const verifyPersonalDetails = async (companyId, id, verifiedBy) => {
 };
 
 module.exports = {
-  listEmployees, getEmployee, createEmployee,
+  listEmployees, getEmployee, getMyEmployee, createEmployee,
   updateEmployee, changeStatus, deleteEmployee,
   updateProbation, getReportees, enablePortalAccess, assignEmployeeId,
   verifyPersonalDetails,

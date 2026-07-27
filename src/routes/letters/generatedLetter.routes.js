@@ -11,6 +11,7 @@ router.post('/generate',       authenticate, authorize('letters', 'create'), gen
 router.post('/preview',        authenticate, authorize('letters', 'view'),   ctrl.preview);
 router.post('/build-preview',  authenticate, authorize('letters', 'view'),   ctrl.buildPreview);
 router.post('/:id/send',       authenticate, authorize('letters', 'send'),   ctrl.send);
+router.patch('/:id/review-signed', authenticate, authorize('letters', 'update'), ctrl.reviewSigned);
 router.patch('/:id',           authenticate, authorize('letters', 'update'), ctrl.updateDraft);
 router.delete('/:id',          authenticate, authorize('letters', 'delete'), ctrl.remove);
 

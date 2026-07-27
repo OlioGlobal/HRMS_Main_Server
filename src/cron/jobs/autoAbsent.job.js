@@ -160,6 +160,13 @@ const run = async () => {
 
         if (recordedIds.has(empId)) continue;
 
+        // Skip days before the employee joined — they shouldn't be marked absent
+        if (emp.joiningDate) {
+          const j = new Date(emp.joiningDate);
+          const joinStart = new Date(Date.UTC(j.getUTCFullYear(), j.getUTCMonth(), j.getUTCDate()));
+          if (todayDate < joinStart) continue;
+        }
+
         // Resolve policy
         const policy = emp.workPolicy_id
           ? policyMap.get(emp.workPolicy_id.toString())

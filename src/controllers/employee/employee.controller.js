@@ -25,6 +25,12 @@ const getEmployee = catchAsync(async (req, res) => {
   sendSuccess(res, { data: { employee } });
 });
 
+// Requesting user's own employee record (self-service profile)
+const getMyProfile = catchAsync(async (req, res) => {
+  const employee = await svc.getMyEmployee(req.user.companyId, req.user.userId);
+  sendSuccess(res, { data: { employee } });
+});
+
 const createEmployee = catchAsync(async (req, res) => {
   const { employee, tempPassword } = await svc.createEmployee(
     req.user.companyId,
@@ -88,7 +94,7 @@ const verifyPersonalDetails = catchAsync(async (req, res) => {
 });
 
 module.exports = {
-  listEmployees, getEmployee, createEmployee,
+  listEmployees, getEmployee, getMyProfile, createEmployee,
   updateEmployee, changeStatus, deleteEmployee,
   updateProbation, getReportees, enablePortalAccess, assignEmployeeId,
   verifyPersonalDetails,

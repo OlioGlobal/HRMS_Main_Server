@@ -7,6 +7,10 @@ const DocumentType          = require('../../models/DocumentType');
 const AppError              = require('../../utils/AppError');
 const { sendEmail }         = require('../../utils/email');
 const { encryptBankDetails, decryptBankDetails } = require('../../utils/encryption');
+const r2                    = require('../../utils/r2');
+
+const SIGNED_ALLOWED_FMTS = ['pdf', 'jpg', 'jpeg', 'png'];
+const SIGNED_MAX_MB       = 10;
 
 // ─── Shared branded email builder ─────────────────────────────────────────────
 const _buildHrNotificationEmail = ({ companyName, hrName, candidateName, designation, joiningDate, action, details, hrmsLink }) => `
@@ -89,7 +93,7 @@ const getChecklist = async (token) => {
   const compId   = employee.company_id._id ?? employee.company_id;
 
   const [letters, policies, acks, docTypes, uploadedDocs] = await Promise.all([
-    GeneratedLetter.find({ employee_id: empId, status: { $in: ['sent', 'accepted', 'declined'] } })
+    GeneratedLetter.find({ employee_id: empId, status: { $in: ['sent', 'signed_uploaded', 'accepted', 'declined'] } })
       .populate('template_id', 'name letterType')
       .sort({ createdAt: 1 })
       .lean(),
@@ -102,7 +106,7 @@ const getChecklist = async (token) => {
   const ackedPolicyIds  = new Set(acks.map(a => a.policy_id?.toString()));
   const uploadedTypeIds = new Set(uploadedDocs.map(d => d.document_type_id?.toString()));
 
-  const letterItems = letters.map(l => ({
+  const letterItems = await Promise.all(letters.map(async (l) => ({
     _id:               l._id,
     name:              l.template_id?.name ?? l.letterType,
     letterType:        l.letterType,
@@ -113,7 +117,12 @@ const getChecklist = async (token) => {
     declinedAt:        l.declinedAt,
     declineReason:     l.declineReason,
     resolvedContent:   l.resolvedContent,
-  }));
+    // Signed-copy flow: downloadable PDF, uploaded signed copy, and HR's note
+    pdfUrl:            l.pdfKey        ? await r2.getDownloadUrl(l.pdfKey).catch(() => null)        : null,
+    signedFileUrl:     l.signedFileKey ? await r2.getDownloadUrl(l.signedFileKey).catch(() => null) : null,
+    signedUploadedAt:  l.signedUploadedAt ?? null,
+    reviewNote:        l.reviewNote ?? null,
+  })));
 
   const policyItems = policies.map(p => ({
     _id:          p._id,
@@ -242,6 +251,58 @@ const declineLetter = async (token, letterId, reason) => {
   return letter.toObject();
 };
 
+// ─── Upload signed letter copy ─────────────────────────────────────────────────
+// Candidate downloads the offer PDF, signs it, and uploads the signed copy here.
+// Moves the letter to `signed_uploaded` so HR can review & confirm.
+const uploadSignedLetter = async (token, letterId, file) => {
+  if (!file) throw new AppError('No file uploaded.', 400);
+
+  const employee = await getEmployeeByToken(token);
+  const compId   = employee.company_id._id ?? employee.company_id;
+
+  const letter = await GeneratedLetter.findOne({
+    _id:         letterId,
+    employee_id: employee._id,
+    company_id:  compId,
+  }).populate('template_id', 'name');
+  if (!letter) throw new AppError('Letter not found.', 404);
+  if (!letter.requiresAcceptance) throw new AppError('This letter does not require a signature.', 400);
+  if (letter.status === 'accepted') throw new AppError('This letter has already been confirmed.', 400);
+  if (letter.status === 'declined') throw new AppError('This letter was declined and cannot be signed.', 400);
+
+  // Validate format & size
+  const ext = String(file.originalname).split('.').pop().toLowerCase();
+  if (!SIGNED_ALLOWED_FMTS.includes(ext)) {
+    throw new AppError(`File format .${ext} not allowed. Allowed: ${SIGNED_ALLOWED_FMTS.join(', ')}`, 400);
+  }
+  if (file.size / (1024 * 1024) > SIGNED_MAX_MB) {
+    throw new AppError(`File size exceeds ${SIGNED_MAX_MB}MB limit.`, 400);
+  }
+
+  // Upload to B2
+  const fileKey = r2.buildLetterKey(compId, letter._id, 'signed', file.originalname);
+  await r2.uploadToB2(fileKey, file.buffer, file.mimetype);
+
+  letter.status         = 'signed_uploaded';
+  letter.signedFileKey  = fileKey;
+  letter.signedFileName = file.originalname;
+  letter.signedFileSize = file.size;
+  letter.signedMimeType = file.mimetype;
+  letter.signedUploadedAt = new Date();
+  letter.reviewNote     = null; // clear any prior rejection note
+  await letter.save();
+
+  const letterName = letter.template_id?.name ?? letter.letterType;
+  await _notifyHr(
+    employee,
+    `Signed ${letterName} Uploaded`,
+    `<strong>${employee.firstName} ${employee.lastName}</strong> has uploaded a <strong>signed ${letterName}</strong> and it is awaiting your review.`,
+    'Review the signed copy in the Letters section and approve to move the candidate forward.'
+  );
+
+  return letter.toObject();
+};
+
 // ─── Acknowledge policy ────────────────────────────────────────────────────────
 const acknowledgePolicy = async (token, policyId) => {
   const employee = await getEmployeeByToken(token);
@@ -292,4 +353,4 @@ const savePersonalDetails = async (token, body) => {
   return updated;
 };
 
-module.exports = { getEmployeeByToken, getChecklist, acceptLetter, declineLetter, acknowledgePolicy, savePersonalDetails };
+module.exports = { getEmployeeByToken, getChecklist, acceptLetter, declineLetter, uploadSignedLetter, acknowledgePolicy, savePersonalDetails };

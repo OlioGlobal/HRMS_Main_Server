@@ -17,6 +17,8 @@ const upload = multer({
 });
 
 // ─── Document Types ─────────────────────────────────────────────────────────
+// Self-service list for the upload picker (employees lack 'document_types:view')
+router.get(   '/types/uploadable', authenticate, authorize('documents', 'view'), docTypeCtrl.uploadable);
 router.get(   '/types',     authenticate, authorize('document_types', 'view'),   docTypeCtrl.list);
 router.post(  '/types',     authenticate, authorize('document_types', 'create'), v.createDocumentType, docTypeCtrl.create);
 router.patch( '/types/:id', authenticate, authorize('document_types', 'update'), v.updateDocumentType, docTypeCtrl.update);

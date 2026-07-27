@@ -40,8 +40,9 @@ const startServer = async () => {
   });
 
   // Graceful shutdown
-  process.on('SIGTERM', () => {
+  process.on('SIGTERM', async () => {
     console.log('SIGTERM received. Shutting down gracefully...');
+    try { await require('./src/utils/pdf').closeBrowser(); } catch { /* ignore */ }
     server.close(() => process.exit(0));
   });
 

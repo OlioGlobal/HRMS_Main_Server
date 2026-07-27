@@ -7,6 +7,8 @@ const AppError         = require('../../utils/AppError');
 const { resolveVariables, compileContent } = require('./variableResolver.service');
 const { sendEmail }    = require('../../utils/email');
 const { v4: uuidv4 }  = require('uuid');
+const { htmlToPdfBuffer } = require('../../utils/pdf');
+const r2 = require('../../utils/r2');
 
 // ─── List ──────────────────────────────────────────────────────────────────────
 const list = async (companyId, query = {}) => {
@@ -28,6 +30,11 @@ const getOne = async (companyId, id) => {
     .populate('template_id', 'name letterType signatoryName signatoryTitle signatoryEmail')
     .lean();
   if (!letter) throw new AppError('Letter not found.', 404);
+
+  // Fresh presigned download URLs for the generated PDF and the candidate's signed copy
+  letter.pdfUrl        = letter.pdfKey        ? await r2.getDownloadUrl(letter.pdfKey).catch(() => null)        : null;
+  letter.signedFileUrl = letter.signedFileKey ? await r2.getDownloadUrl(letter.signedFileKey).catch(() => null) : null;
+
   return letter;
 };
 
@@ -101,6 +108,20 @@ const send = async (companyId, letterId, userId) => {
   const company = await Company.findById(companyId).select('name').lean();
   const companyName = company?.name || 'HR Team';
 
+  // Generate a real PDF from the print-ready HTML so the candidate can
+  // download → print → sign → upload. Non-fatal: if PDF generation fails the
+  // letter is still sent (candidate can print from the portal HTML instead).
+  let pdfKey = letter.pdfKey || null;
+  try {
+    const pdfBuffer = await htmlToPdfBuffer(letter.resolvedContent);
+    const safeName  = String(letter.template_id?.name ?? letter.letterType).replace(/[^a-zA-Z0-9._-]/g, '_');
+    pdfKey = r2.buildLetterKey(companyId, letter._id, 'system', `${safeName}.pdf`);
+    await r2.uploadToB2(pdfKey, pdfBuffer, 'application/pdf');
+  } catch (err) {
+    console.error('[Letters] PDF generation failed, sending without PDF:', err.message);
+    pdfKey = null;
+  }
+
   // Always generate a portal token so the candidate can view (and optionally accept) the letter
   const token  = uuidv4();
   const expiry = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
@@ -125,7 +146,10 @@ const send = async (companyId, letterId, userId) => {
 
   await sendEmail({ to: toEmail, subject: `Your ${letterName} from ${companyName}`, html: emailHtml });
 
-  await GeneratedLetter.updateOne({ _id: letterId }, { $set: { status: 'sent', sentAt: new Date() } });
+  await GeneratedLetter.updateOne(
+    { _id: letterId },
+    { $set: { status: 'sent', sentAt: new Date(), pdfKey } }
+  );
 
   return { sent: true, to: toEmail, portalLink };
 };
@@ -152,6 +176,94 @@ const decline = async (letterId, employeeId, reason) => {
   letter.declinedAt  = new Date();
   letter.declineReason = reason ?? null;
   await letter.save();
+  return letter.toObject();
+};
+
+// ─── HR review of the candidate's uploaded signed copy ────────────────────────
+// action: 'approve' → status accepted, advance pre_join → offered
+//         'reject'  → status back to sent (+ note), candidate re-signs & re-uploads
+const reviewSignedLetter = async (companyId, letterId, userId, { action, note } = {}) => {
+  if (!['approve', 'reject'].includes(action)) {
+    throw new AppError('action must be "approve" or "reject".', 400);
+  }
+
+  const letter = await GeneratedLetter.findOne({ _id: letterId, company_id: companyId })
+    .populate({ path: 'employee_id', populate: { path: 'designation_id', select: 'name' } })
+    .populate('template_id', 'name');
+
+  if (!letter) throw new AppError('Letter not found.', 404);
+  if (letter.status !== 'signed_uploaded') {
+    throw new AppError('No signed copy is pending review for this letter.', 400);
+  }
+
+  const employee   = letter.employee_id;
+  const letterName = letter.template_id?.name ?? letter.letterType;
+  const now        = new Date();
+  const toEmail    = employee?.personalEmail || employee?.email;
+
+  const company = await Company.findById(companyId).select('name').lean();
+  const companyName = company?.name || 'HR Team';
+
+  if (action === 'approve') {
+    letter.status     = 'accepted';
+    letter.acceptedAt = letter.acceptedAt ?? now;
+    letter.reviewedBy = userId;
+    letter.reviewedAt = now;
+    letter.reviewNote = note?.trim() || null;
+    await letter.save();
+
+    // Move the candidate forward in the pipeline
+    if (employee?.status === 'pre_join') {
+      await Employee.updateOne({ _id: employee._id }, { $set: { status: 'offered' } });
+    }
+
+    // Confirmation email to candidate (non-fatal)
+    if (toEmail) {
+      try {
+        await sendEmail({
+          to: toEmail,
+          subject: `Your signed ${letterName} has been confirmed — ${companyName}`,
+          html: _buildCandidateReviewEmail({
+            employeeName: `${employee.firstName} ${employee.lastName}`,
+            companyName, letterName, approved: true,
+          }),
+        });
+      } catch (err) { console.error('[Letters] Approve email failed:', err.message); }
+    }
+
+    return letter.toObject();
+  }
+
+  // ── reject → send back for re-upload ──
+  // Refresh the portal token so the candidate can always get back in
+  const token  = uuidv4();
+  const expiry = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+  await Employee.updateOne(
+    { _id: employee._id },
+    { $set: { preBoardingToken: token, preBoardingTokenExpiry: expiry } }
+  );
+
+  letter.status     = 'sent';
+  letter.reviewedBy = userId;
+  letter.reviewedAt = now;
+  letter.reviewNote = note?.trim() || 'Please re-upload a correctly signed copy.';
+  await letter.save();
+
+  if (toEmail) {
+    try {
+      await sendEmail({
+        to: toEmail,
+        subject: `Action needed: re-upload your signed ${letterName} — ${companyName}`,
+        html: _buildCandidateReviewEmail({
+          employeeName: `${employee.firstName} ${employee.lastName}`,
+          companyName, letterName, approved: false,
+          note: letter.reviewNote,
+          portalLink: `${process.env.CLIENT_URL}/preboarding?token=${token}`,
+        }),
+      });
+    } catch (err) { console.error('[Letters] Reject email failed:', err.message); }
+  }
+
   return letter.toObject();
 };
 
@@ -374,4 +486,41 @@ const _buildLetterEmail = ({ employeeName, letterName, portalLink, requiresAccep
 </body>
 </html>`;
 
-module.exports = { list, getOne, generate, preview, buildPreview, updateDraft, send, accept, decline, remove };
+// ─── Candidate email after HR reviews their signed copy ───────────────────────
+const _buildCandidateReviewEmail = ({ employeeName, companyName, letterName, approved, note, portalLink }) => `
+<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#f3f4f6;font-family:Arial,sans-serif;">
+  <div style="max-width:600px;margin:32px auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,0.08);">
+    <div style="background:${approved ? '#16a34a' : '#dc2626'};padding:26px 34px;">
+      <h1 style="color:#fff;margin:0;font-size:20px;font-weight:700;">${companyName}</h1>
+      <p style="color:#ffffffcc;margin:6px 0 0;font-size:13px;">${approved ? 'Signed document confirmed' : 'Action required'}</p>
+    </div>
+    <div style="padding:32px;">
+      <p style="margin:0 0 16px;font-size:15px;color:#111;">Hi <strong>${employeeName}</strong>,</p>
+      ${approved ? `
+        <p style="margin:0 0 20px;font-size:14px;color:#374151;line-height:1.7;">
+          We've received and <strong>confirmed</strong> your signed <strong>${letterName}</strong>. Everything is in order — no further action is needed for this step. Welcome aboard! 🎉
+        </p>` : `
+        <p style="margin:0 0 16px;font-size:14px;color:#374151;line-height:1.7;">
+          We reviewed the signed <strong>${letterName}</strong> you uploaded, but we need you to re-upload it.
+        </p>
+        <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:14px 18px;margin-bottom:20px;">
+          <p style="margin:0;font-size:13px;color:#991b1b;"><strong>Reason:</strong> ${note}</p>
+        </div>
+        ${portalLink ? `
+        <div style="text-align:center;margin:24px 0;">
+          <a href="${portalLink}" style="background:#dc2626;color:#fff;padding:12px 30px;border-radius:8px;text-decoration:none;font-weight:700;font-size:14px;display:inline-block;">
+            Re-upload Signed Copy →
+          </a>
+        </div>` : ''}`}
+    </div>
+    <div style="background:#f9fafb;border-top:1px solid #e5e7eb;padding:16px 34px;text-align:center;font-size:12px;color:#9ca3af;">
+      ${companyName} HRMS &nbsp;·&nbsp; This is an automated notification
+    </div>
+  </div>
+</body>
+</html>`;
+
+module.exports = { list, getOne, generate, preview, buildPreview, updateDraft, send, accept, decline, reviewSignedLetter, remove };

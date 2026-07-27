@@ -466,6 +466,36 @@ const getMyPayslips = async (employeeId, companyId) => {
   return records.filter(r => r.payrollRun_id !== null).map(decryptPayrollDoc);
 };
 
+// ─── Assemble everything needed to render a payslip (PDF / email) ───────────
+// Returns { record, employee, company } for an approved/paid period, with the
+// employee's designation & department populated for the payslip header.
+const getPayslipContext = async (employeeId, companyId, month, year) => {
+  const Company = require('../../models/Company');
+
+  const run = await PayrollRun.findOne({
+    company_id: companyId, month, year, status: { $in: ['approved', 'paid'] },
+  }).lean();
+  if (!run) throw new AppError('No approved/paid payroll run found for this period.', 404);
+
+  const raw = await PayrollRecord.findOne({
+    payrollRun_id: run._id, employee_id: employeeId, company_id: companyId,
+    status: { $nin: ['warning', 'skipped'] },
+  }).lean();
+  if (!raw) throw new AppError('No payroll record found for this employee.', 404);
+  const record = decryptPayrollDoc(raw);
+  record.month = run.month;
+  record.year  = run.year;
+
+  const employee = await Employee.findOne({ _id: employeeId, company_id: companyId })
+    .populate('designation_id', 'name')
+    .populate('department_id', 'name')
+    .lean();
+
+  const company = await Company.findById(companyId).lean();
+
+  return { record, employee, company, run };
+};
+
 // ─── Helper: recalculate run totals ─────────────────────────────────────────
 const recalcRunTotals = async (runId) => {
   const activeRecords = await PayrollRecord.find({
@@ -501,4 +531,5 @@ module.exports = {
   editRecord,
   skipRecord,
   getMyPayslips,
+  getPayslipContext,
 };

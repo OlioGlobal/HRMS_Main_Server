@@ -21,6 +21,12 @@ router.post('/',
   ctrl.createEmployee
 );
 
+// Own profile (self-service) — must precede '/:id' so it isn't captured as an id
+router.get('/me',
+  authenticate,
+  ctrl.getMyProfile
+);
+
 // Single employee
 router.get('/:id',
   authenticate, authorize('employees', 'view'),

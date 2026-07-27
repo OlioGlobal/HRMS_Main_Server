@@ -44,6 +44,14 @@ const updateCompany = async (companyId, body) => {
         flat[`settings.geofencing.${k}`] = v;
       }
     }
+    // Handle payslip nested fields individually so a partial patch never wipes
+    // sibling fields (e.g. signatureImage, managed by the upload endpoint).
+    if (body.settings.payslip) {
+      delete flat['settings.payslip'];
+      for (const [k, v] of Object.entries(body.settings.payslip)) {
+        flat[`settings.payslip.${k}`] = v;
+      }
+    }
     delete update.settings;
     Object.assign(update, flat);
   }
@@ -93,4 +101,77 @@ const removeLogo = async (companyId) => {
   await Company.findByIdAndUpdate(companyId, { $set: { logo: null } });
 };
 
-module.exports = { getCompany, updateCompany, uploadLogo, removeLogo };
+// ─── Upload authorised-signatory signature ───────────────────────────────────
+const uploadSignature = async (companyId, file) => {
+  if (!file) throw new AppError('No file provided.', 400);
+
+  const ext     = path.extname(file.originalname).toLowerCase();
+  const allowed = ['.jpg', '.jpeg', '.png', '.webp', '.svg'];
+  if (!allowed.includes(ext)) throw new AppError('Only jpg, png, webp, svg allowed.', 400);
+
+  // Remove old signature file if it exists locally
+  const existing = await Company.findById(companyId).select('settings.payslip.signatureImage').lean();
+  const oldRef = existing?.settings?.payslip?.signatureImage;
+  if (oldRef && oldRef.startsWith('/uploads/')) {
+    const oldPath = path.join(process.cwd(), 'public', oldRef);
+    if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+  }
+
+  const url = `/uploads/signatures/${file.filename}`;
+  const company = await Company.findByIdAndUpdate(
+    companyId,
+    { $set: { 'settings.payslip.signatureImage': url } },
+    { new: true }
+  ).lean();
+
+  return company;
+};
+
+// ─── Remove signature ────────────────────────────────────────────────────────
+const removeSignature = async (companyId) => {
+  const existing = await Company.findById(companyId).select('settings.payslip.signatureImage').lean();
+  const oldRef = existing?.settings?.payslip?.signatureImage;
+  if (oldRef && oldRef.startsWith('/uploads/')) {
+    const oldPath = path.join(process.cwd(), 'public', oldRef);
+    if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+  }
+  await Company.findByIdAndUpdate(companyId, { $set: { 'settings.payslip.signatureImage': null } });
+};
+
+// ─── Upload payslip logo (overrides company logo on the slip) ────────────────
+const uploadPayslipLogo = async (companyId, file) => {
+  if (!file) throw new AppError('No file provided.', 400);
+
+  const ext     = path.extname(file.originalname).toLowerCase();
+  const allowed = ['.jpg', '.jpeg', '.png', '.webp', '.svg'];
+  if (!allowed.includes(ext)) throw new AppError('Only jpg, png, webp, svg allowed.', 400);
+
+  const existing = await Company.findById(companyId).select('settings.payslip.logo').lean();
+  const oldRef = existing?.settings?.payslip?.logo;
+  if (oldRef && oldRef.startsWith('/uploads/')) {
+    const oldPath = path.join(process.cwd(), 'public', oldRef);
+    if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+  }
+
+  const url = `/uploads/payslip-logos/${file.filename}`;
+  const company = await Company.findByIdAndUpdate(
+    companyId,
+    { $set: { 'settings.payslip.logo': url } },
+    { new: true }
+  ).lean();
+
+  return company;
+};
+
+// ─── Remove payslip logo ─────────────────────────────────────────────────────
+const removePayslipLogo = async (companyId) => {
+  const existing = await Company.findById(companyId).select('settings.payslip.logo').lean();
+  const oldRef = existing?.settings?.payslip?.logo;
+  if (oldRef && oldRef.startsWith('/uploads/')) {
+    const oldPath = path.join(process.cwd(), 'public', oldRef);
+    if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+  }
+  await Company.findByIdAndUpdate(companyId, { $set: { 'settings.payslip.logo': null } });
+};
+
+module.exports = { getCompany, updateCompany, uploadLogo, removeLogo, uploadSignature, removeSignature, uploadPayslipLogo, removePayslipLogo };

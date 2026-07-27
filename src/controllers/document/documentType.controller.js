@@ -7,6 +7,14 @@ const list = catchAsync(async (req, res) => {
   sendSuccess(res, { data: { documentTypes: types } });
 });
 
+// Self-service: active types the employee is allowed to upload (whoUploads employee/both).
+// Gated on 'documents:view' (which employees have) rather than 'document_types:view' (HR-only config).
+const uploadable = catchAsync(async (req, res) => {
+  const all = await service.listDocumentTypes(req.user.companyId, {});
+  const types = all.filter((dt) => dt.whoUploads === 'employee' || dt.whoUploads === 'both');
+  sendSuccess(res, { data: { documentTypes: types } });
+});
+
 const get = catchAsync(async (req, res) => {
   const dt = await service.getDocumentType(req.user.companyId, req.params.id);
   sendSuccess(res, { data: { documentType: dt } });
@@ -27,4 +35,4 @@ const remove = catchAsync(async (req, res) => {
   sendSuccess(res, { message: 'Document type deleted' });
 });
 
-module.exports = { list, get, create, update, remove };
+module.exports = { list, uploadable, get, create, update, remove };

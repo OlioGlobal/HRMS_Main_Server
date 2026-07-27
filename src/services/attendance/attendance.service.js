@@ -54,6 +54,37 @@ const dayStartInTZ = (tz = 'UTC') => {
   return new Date(Date.UTC(y, m - 1, d));
 };
 
+/** Normalize an employee's joining date to UTC midnight (matches how `date` is stored). */
+const joinDayStartUTC = (joiningDate) => {
+  if (!joiningDate) return null;
+  const j = new Date(joiningDate);
+  if (isNaN(j.getTime())) return null;
+  return new Date(Date.UTC(j.getUTCFullYear(), j.getUTCMonth(), j.getUTCDate()));
+};
+
+/**
+ * Bucket attendance records into summary counts. Buckets are mutually exclusive.
+ * A late arrival counts as `late` (via the isLate flag) even when its stored
+ * status is still 'present' — e.g. clocked in late but not yet clocked out.
+ */
+const buildSummary = (records) => {
+  const summary = {
+    present: 0, late: 0, half_day: 0, absent: 0,
+    on_leave: 0, holiday: 0, totalHours: 0, overtimeHours: 0,
+  };
+  for (const r of records) {
+    summary.totalHours    += r.totalHours || 0;
+    summary.overtimeHours += r.overtimeHours || 0;
+    if (r.status === 'holiday')        summary.holiday++;
+    else if (r.status === 'on_leave')  summary.on_leave++;
+    else if (r.status === 'absent')    summary.absent++;
+    else if (r.status === 'half_day')  summary.half_day++;
+    else if (r.status === 'late' || r.isLate) summary.late++;
+    else summary.present++;
+  }
+  return summary;
+};
+
 /** Day-of-week (SUN..SAT) in a given timezone. */
 const weekdayInTZ = (tz = 'UTC') =>
   new Intl.DateTimeFormat('en-US', { timeZone: tz, weekday: 'short' })
@@ -292,20 +323,16 @@ const getMyAttendance = async (companyId, userId, { month, year } = {}) => {
     };
   }
 
+  // Never surface attendance before the employee joined (guards against pre-join 'absent' rows)
+  const joinStart = joinDayStartUTC(employee.joiningDate);
+  if (joinStart) {
+    filter.date = filter.date || {};
+    if (!filter.date.$gte || joinStart > filter.date.$gte) filter.date.$gte = joinStart;
+  }
+
   const records = await AttendanceRecord.find(filter).sort({ date: 1 }).lean();
 
-  // Summary
-  const summary = {
-    present: 0, late: 0, half_day: 0, absent: 0,
-    on_leave: 0, holiday: 0, totalHours: 0, overtimeHours: 0,
-  };
-  records.forEach((r) => {
-    if (summary[r.status] !== undefined) summary[r.status]++;
-    summary.totalHours    += r.totalHours || 0;
-    summary.overtimeHours += r.overtimeHours || 0;
-  });
-
-  return { records, summary, employee };
+  return { records, summary: buildSummary(records), employee };
 };
 
 // ─── All attendance records (HR view, scope-filtered) ────────────────────────
@@ -410,25 +437,22 @@ const getMonthlySummary = async (companyId, employeeId, { month, year }) => {
   const m = Number(month) - 1;
   const y = Number(year);
 
+  const dateFilter = { $gte: new Date(Date.UTC(y, m, 1)), $lt: new Date(Date.UTC(y, m + 1, 1)) };
+
+  // Clamp to the employee's joining date so pre-join 'absent' rows don't show
+  const emp = await Employee.findOne({ _id: employeeId, company_id: companyId }).select('joiningDate').lean();
+  const joinStart = joinDayStartUTC(emp?.joiningDate);
+  if (joinStart && joinStart > dateFilter.$gte) dateFilter.$gte = joinStart;
+
   const records = await AttendanceRecord.find({
     company_id: companyId,
     employee_id: employeeId,
-    date: { $gte: new Date(Date.UTC(y, m, 1)), $lt: new Date(Date.UTC(y, m + 1, 1)) },
+    date: dateFilter,
   })
     .sort({ date: 1 })
     .lean();
 
-  const summary = {
-    present: 0, late: 0, half_day: 0, absent: 0,
-    on_leave: 0, holiday: 0, totalHours: 0, overtimeHours: 0,
-  };
-  records.forEach((r) => {
-    if (summary[r.status] !== undefined) summary[r.status]++;
-    summary.totalHours    += r.totalHours || 0;
-    summary.overtimeHours += r.overtimeHours || 0;
-  });
-
-  return { records, summary };
+  return { records, summary: buildSummary(records) };
 };
 
 // ─── HR Override ─────────────────────────────────────────────────────────────

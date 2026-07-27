@@ -1,5 +1,6 @@
 const Employee       = require('../../models/Employee');
 const HiringPipeline = require('../../models/HiringPipeline');
+const GeneratedLetter = require('../../models/GeneratedLetter');
 const Company        = require('../../models/Company');
 const User           = require('../../models/User');
 const UserRole       = require('../../models/UserRole');
@@ -289,6 +290,24 @@ const activate = async (companyId, id, options = {}) => {
 
   if (missing.length) {
     throw new AppError(`Cannot activate — missing required fields: ${missing.join(', ')}.`, 422);
+  }
+
+  // Mandatory step: a sent offer letter that requires acceptance must be signed &
+  // HR-confirmed (status 'accepted') before activation — unless HR overrode pre-boarding.
+  if (!candidate.preboardingOverriddenAt) {
+    const pendingOffer = await GeneratedLetter.findOne({
+      company_id:         companyId,
+      employee_id:        candidate._id,
+      requiresAcceptance: true,
+      status:             { $in: ['sent', 'signed_uploaded'] },
+    }).select('status').lean();
+
+    if (pendingOffer) {
+      const msg = pendingOffer.status === 'signed_uploaded'
+        ? 'Cannot activate — the signed offer letter is still pending HR review. Approve it first.'
+        : 'Cannot activate — the candidate has not yet uploaded a signed offer letter.';
+      throw new AppError(msg, 422);
+    }
   }
 
   // Probation setup
