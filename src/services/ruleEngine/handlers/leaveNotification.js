@@ -47,7 +47,9 @@ const findRecipients = async (companyId, contextData, config) => {
             .lean();
 
           if (manager?.user_id) {
-            const baseUrl = process.env.CLIENT_URL?.replace(':3000', ':5000') || 'http://localhost:5000';
+            // Email-action links must point at the BACKEND (SERVER_URL), not the
+            // frontend. The old CLIENT_URL ':3000→:5000' swap only worked in dev.
+            const baseUrl = process.env.SERVER_URL || process.env.CLIENT_URL?.replace(':3000', ':5000') || 'http://localhost:5000';
 
             const approveToken = generateActionToken({
               requestId: leaveRequest._id.toString(),

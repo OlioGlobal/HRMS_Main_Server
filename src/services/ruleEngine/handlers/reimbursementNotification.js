@@ -50,7 +50,7 @@ const findRecipients = async (companyId, contextData, config) => {
             .lean();
 
           if (manager?.user_id) {
-            const baseUrl = process.env.CLIENT_URL?.replace(':3000', ':5000') || 'http://localhost:5000';
+            const baseUrl = process.env.SERVER_URL || process.env.CLIENT_URL?.replace(':3000', ':5000') || 'http://localhost:5000';
 
             const approveToken = generateActionToken({
               requestId:  reimbursement._id.toString(),
@@ -94,7 +94,7 @@ const findRecipients = async (companyId, contextData, config) => {
         // Notify HR users (HR Manager, HR Staff, Super Admin)
         const hrUserIds = await findHRUsers(companyId);
         for (const hrUserId of hrUserIds) {
-          const baseUrl = process.env.CLIENT_URL?.replace(':3000', ':5000') || 'http://localhost:5000';
+          const baseUrl = process.env.SERVER_URL || process.env.CLIENT_URL?.replace(':3000', ':5000') || 'http://localhost:5000';
 
           const approveToken = generateActionToken({
             requestId:  reimbursement._id.toString(),
