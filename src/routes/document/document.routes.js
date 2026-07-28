@@ -30,6 +30,7 @@ router.post('/employee/upload-preboarding', upload.single('file'), empDocCtrl.up
 // ─── Employee Documents (self-service) ──────────────────────────────────────
 router.get(   '/my',                 authenticate, authorize('documents', 'view'),   empDocCtrl.myDocuments);
 router.get(   '/my/checklist',       authenticate, authorize('documents', 'view'),   empDocCtrl.myChecklist);
+router.get(   '/my/company-documents', authenticate, authorize('documents', 'view'), empDocCtrl.myCompanyDocuments);
 router.post(  '/my/upload',          authenticate, authorize('documents', 'create'), upload.single('file'), empDocCtrl.myUpload);
 router.get(   '/my/:docId/download', authenticate, authorize('documents', 'export'), empDocCtrl.myDownload);
 router.delete('/my/:docId',          authenticate, authorize('documents', 'delete'), empDocCtrl.myDelete);

@@ -73,6 +73,14 @@ const employeeDocumentSchema = new mongoose.Schema(
       ref:      'User',
       required: true,
     },
+
+    // Set when this document was mapped from a generated/signed letter (shares its
+    // B2 object). Deleting such a doc must NOT delete the file — the letter owns it.
+    sourceLetter_id: {
+      type:    mongoose.Schema.Types.ObjectId,
+      ref:     'GeneratedLetter',
+      default: null,
+    },
   },
   { timestamps: true }
 );

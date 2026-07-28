@@ -7,6 +7,7 @@ const UserRole       = require('../../models/UserRole');
 const Role           = require('../../models/Role');
 const AppError       = require('../../utils/AppError');
 const { sendEmail }  = require('../../utils/email');
+const { mapLetterToDocument } = require('../document/employeeDocument.service');
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -121,12 +122,20 @@ const create = async (companyId, userId, body) => {
     firstName, lastName, personalEmail, phone,
     designation_id, location_id, department_id,
     joiningDate, roughGross, pipeline_id, addresses,
-    noticePeriodDays, employmentType, assignedHr_id,
+    noticePeriodDays, employmentType, assignedHr_id, probationMonths,
   } = body;
 
   if (!firstName || !lastName) {
     throw new AppError('First name and last name are required.', 400);
   }
+
+  // Probation captured at creation (default 3 months). The end date is a preliminary
+  // estimate from the entered joining date — it's recalculated on the ACTUAL joining
+  // date at activation.
+  const probMonths = probationMonths != null ? Number(probationMonths) : 3;
+  const probEndDate = probMonths > 0 && joiningDate
+    ? (() => { const d = new Date(joiningDate); d.setMonth(d.getMonth() + probMonths); return d; })()
+    : null;
 
   const candidate = await Employee.create({
     company_id:          companyId,
@@ -142,6 +151,9 @@ const create = async (companyId, userId, body) => {
     noticePeriodDays:    noticePeriodDays ?? null,
     employmentType:      employmentType ?? 'full_time',
     assignedHr_id:       assignedHr_id ?? null,
+    probationDays:       probMonths > 0 ? probMonths * 30 : 0,
+    probationEndDate:    probEndDate,
+    probationStatus:     probMonths > 0 ? 'ongoing' : 'waived',
     pipelineCurrentStep: 0,
     status:              'pre_join',
     addresses:           addresses ?? [],
@@ -310,8 +322,10 @@ const activate = async (companyId, id, options = {}) => {
     }
   }
 
-  // Probation setup
-  const months = Number(options.probationMonths ?? 0);
+  // Probation setup — recalculated on the ACTUAL joining date. Falls back to the
+  // probation captured at creation when the activation form doesn't override it.
+  const months = Number(options.probationMonths
+    ?? (candidate.probationDays != null ? Math.round(candidate.probationDays / 30) : 3));
   if (months > 0) {
     const probationEndDate = new Date(candidate.joiningDate);
     probationEndDate.setMonth(probationEndDate.getMonth() + months);
@@ -379,8 +393,11 @@ const activate = async (companyId, id, options = {}) => {
       const companyName = company?.name ?? 'Your Company';
       const dashboardUrl = `${process.env.CLIENT_URL}/dashboard`;
       const portalUrl    = `${process.env.CLIENT_URL}/portal`;
+      // The work email is brand-new and may not be receivable yet, so also send the
+      // credentials to the candidate's personal email (deduped).
+      const recipients = [...new Set([emailLower, candidate.personalEmail].filter(Boolean))].join(', ');
       await sendEmail({
-        to:      emailLower,
+        to:      recipients,
         subject: `Welcome to ${companyName} — Your Account Login Details`,
         html:    _buildWelcomeEmail({
           firstName:   candidate.firstName,
@@ -393,6 +410,19 @@ const activate = async (companyId, id, options = {}) => {
       });
     } catch (err) {
       console.error('[Activate] Welcome email failed:', err.message);
+    }
+  }
+
+  // Map HR-selected letters (offer / interim / appointment) into employee documents.
+  // Runs after activation so the employee record exists; failures don't block activation.
+  if (Array.isArray(options.documentMappings) && options.documentMappings.length) {
+    for (const m of options.documentMappings) {
+      if (!m?.letterId || !m?.documentTypeId) continue;
+      try {
+        await mapLetterToDocument(companyId, candidate._id, m.letterId, m.documentTypeId, options.userId);
+      } catch (err) {
+        console.error('[Activate] Letter→document mapping failed:', err.message);
+      }
     }
   }
 

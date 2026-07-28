@@ -130,6 +130,15 @@ const clockIn = async (companyId, userId, body) => {
     throw new AppError('Today is not a working day as per your work policy.', 400);
   }
 
+  // Can't clock in on a full-day approved leave. A half-day leave is fine —
+  // the employee is expected to work the other half.
+  const { findApprovedLeaveOnDay } = require('../../utils/leaveAttendanceLink');
+  const { todayCivil } = require('../../utils/civilDate');
+  const leaveToday = await findApprovedLeaveOnDay(companyId, employee._id, todayCivil(tz));
+  if (leaveToday && !leaveToday.isHalfDay) {
+    throw new AppError('You are on approved full-day leave today and cannot clock in.', 400);
+  }
+
   // Detect location type
   let clockInType = body.clockInType || 'remote';
   let locationName = null;
@@ -332,7 +341,14 @@ const getMyAttendance = async (companyId, userId, { month, year } = {}) => {
 
   const records = await AttendanceRecord.find(filter).sort({ date: 1 }).lean();
 
-  return { records, summary: buildSummary(records), employee };
+  // Resolve the employee's own working days (for weekend detection on the client)
+  let workingDays = ['MON', 'TUE', 'WED', 'THU', 'FRI'];
+  try {
+    const policy = await getWorkPolicy(employee);
+    if (policy?.workingDays?.length) workingDays = policy.workingDays;
+  } catch { /* fall back to Mon–Fri */ }
+
+  return { records, summary: buildSummary(records), employee, workingDays };
 };
 
 // ─── All attendance records (HR view, scope-filtered) ────────────────────────

@@ -3,6 +3,7 @@ const slugify = require('../utils/slugify');
 
 const DEFAULT_DOC_TYPES = [
   // ── Company Issued ────────────────────────────────────────────────
+  { name: 'Interim Offer Letter', category: 'company_issued',   whoUploads: 'hr',       isRequired: false, allowedFormats: ['pdf'],                       maxFileSizeMB: 10 },
   { name: 'Offer Letter',       category: 'company_issued',     whoUploads: 'hr',       isRequired: true,  allowedFormats: ['pdf'],                       maxFileSizeMB: 10 },
   { name: 'Appointment Letter', category: 'company_issued',     whoUploads: 'hr',       isRequired: false, allowedFormats: ['pdf'],                       maxFileSizeMB: 10 },
   { name: 'Increment Letter',   category: 'company_issued',     whoUploads: 'hr',       isRequired: false, allowedFormats: ['pdf'],                       maxFileSizeMB: 10 },

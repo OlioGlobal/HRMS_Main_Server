@@ -2,6 +2,7 @@ const EmployeeDocument = require('../../models/EmployeeDocument');
 const DocumentType     = require('../../models/DocumentType');
 const DocumentAuditLog = require('../../models/DocumentAuditLog');
 const Employee         = require('../../models/Employee');
+const GeneratedLetter  = require('../../models/GeneratedLetter');
 const AppError         = require('../../utils/AppError');
 const { uploadToB2, getDownloadUrl, deleteFromR2, buildEmployeeDocKey } = require('../../utils/r2');
 
@@ -74,6 +75,65 @@ const uploadDocument = async (companyId, employeeId, userId, { documentTypeId, e
     status:           autoStatus,
     verifiedBy:       isCompanyIssued ? userId : null,
     verifiedAt:       isCompanyIssued ? new Date() : null,
+  });
+
+  await _logAudit({
+    company_id:  companyId,
+    document_id: doc._id,
+    employee_id: employeeId,
+    action:      'uploaded',
+    performedBy: userId,
+  });
+
+  return doc;
+};
+
+// ─── Map a generated/signed letter into an employee document ─────────────────
+// Stores the letter's file (signed copy preferred, else the generated PDF) as an
+// EmployeeDocument of the given type, auto-verified (company-issued). It shares the
+// letter's existing B2 object via sourceLetter_id — no re-upload.
+const mapLetterToDocument = async (companyId, employeeId, letterId, documentTypeId, userId) => {
+  const letter = await GeneratedLetter.findOne({ _id: letterId, company_id: companyId, employee_id: employeeId });
+  if (!letter) throw new AppError('Letter not found for this employee.', 404);
+
+  const docType = await DocumentType.findOne({ _id: documentTypeId, company_id: companyId });
+  if (!docType) throw new AppError('Document type not found.', 404);
+
+  // Prefer the hand-signed uploaded copy; fall back to the generated PDF.
+  let fileKey, fileName, fileSize, mimeType;
+  if (letter.signedFileKey) {
+    fileKey  = letter.signedFileKey;
+    fileName = letter.signedFileName || `${docType.name} (signed).pdf`;
+    fileSize = letter.signedFileSize || 0;
+    mimeType = letter.signedMimeType || 'application/pdf';
+  } else if (letter.pdfKey) {
+    fileKey  = letter.pdfKey;
+    fileName = `${docType.name}.pdf`;
+    fileSize = 0;
+    mimeType = 'application/pdf';
+  } else {
+    throw new AppError('This letter has no file to map (no signed copy or PDF).', 422);
+  }
+
+  // Archive any existing doc of the same type for this employee
+  await EmployeeDocument.updateMany(
+    { company_id: companyId, employee_id: employeeId, document_type_id: documentTypeId },
+    { $set: { isVisibleToEmployee: false } }
+  );
+
+  const doc = await EmployeeDocument.create({
+    company_id:       companyId,
+    employee_id:      employeeId,
+    document_type_id: documentTypeId,
+    name:             fileName,
+    fileKey,
+    fileSize,
+    mimeType,
+    uploadedBy:       userId,
+    sourceLetter_id:  letter._id,
+    status:           'verified',
+    verifiedBy:       userId,
+    verifiedAt:       new Date(),
   });
 
   await _logAudit({
@@ -191,8 +251,11 @@ const deleteDocument = async (companyId, docId, userId, { isEmployeeSelf = false
     throw new AppError('You can only delete documents you uploaded', 403);
   }
 
-  // Delete from R2
-  try { await deleteFromR2(doc.fileKey); } catch (e) { /* ignore R2 errors on delete */ }
+  // Delete from R2 — unless this doc was mapped from a letter (the letter owns the
+  // shared B2 object; removing it would break the letter's file).
+  if (!doc.sourceLetter_id) {
+    try { await deleteFromR2(doc.fileKey); } catch (e) { /* ignore R2 errors on delete */ }
+  }
 
   await _logAudit({
     company_id:  companyId,
@@ -275,6 +338,37 @@ const getMyDocuments = async (companyId, employeeId) => {
   return docs;
 };
 
+// ─── Company-issued documents for the employee (read-only checklist) ─────────
+// Lists EVERY active company-issued document type with a present/missing flag, so
+// the employee can see which company docs (offer/appointment/etc.) are available.
+const getMyCompanyDocuments = async (companyId, employeeId) => {
+  const types = await DocumentType.find({
+    company_id: companyId,
+    category:   'company_issued',
+    isActive:   true,
+  }).sort({ isRequired: -1, name: 1 }).lean();
+
+  const docs = await EmployeeDocument.find({
+    company_id:          companyId,
+    employee_id:         employeeId,
+    isVisibleToEmployee: true,
+  }).sort({ createdAt: -1 }).lean();
+
+  return types.map((t) => {
+    const doc = docs.find((d) => d.document_type_id.toString() === t._id.toString());
+    return {
+      documentType:   t.name,
+      documentTypeId: t._id,
+      isRequired:     t.isRequired,
+      present:        !!doc,
+      status:         doc ? doc.status : 'missing',
+      documentId:     doc ? doc._id : null,
+      fileName:       doc ? doc.name : null,
+      uploadedAt:     doc ? doc.createdAt : null,
+    };
+  });
+};
+
 // ─── Compliance overview (all employees doc completion %) ───────────────────
 const getComplianceOverview = async (companyId) => {
   const requiredTypes = await DocumentType.find({
@@ -327,6 +421,7 @@ const getComplianceOverview = async (companyId) => {
 module.exports = {
   listEmployeeDocuments,
   uploadDocument,
+  mapLetterToDocument,
   getDocumentDownloadUrl,
   verifyDocument,
   bulkVerifyDocuments,
@@ -335,5 +430,6 @@ module.exports = {
   getDocumentChecklist,
   getExpiringDocuments,
   getMyDocuments,
+  getMyCompanyDocuments,
   getComplianceOverview,
 };

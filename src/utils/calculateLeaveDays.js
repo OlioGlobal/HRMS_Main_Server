@@ -1,5 +1,6 @@
 const PublicHoliday          = require('../models/PublicHoliday');
 const EmployeeOptionalHoliday = require('../models/EmployeeOptionalHoliday');
+const { parseCivil, dayKey, dayOfWeek, civilYear, eachCivilDay } = require('./civilDate');
 
 /**
  * Calculate working leave days between two dates,
@@ -17,10 +18,10 @@ const EmployeeOptionalHoliday = require('../models/EmployeeOptionalHoliday');
  * @returns {Promise<number>} total working days
  */
 const calculateLeaveDays = async (startDate, endDate, opts = {}) => {
-  const start = new Date(startDate);
-  const end   = new Date(endDate);
-  start.setHours(0, 0, 0, 0);
-  end.setHours(0, 0, 0, 0);
+  // Normalize to civil days (noon-UTC) so day-of-week and holiday matching are
+  // identical regardless of server timezone. Holidays are stored noon-UTC too.
+  const start = parseCivil(startDate);
+  const end   = parseCivil(endDate);
 
   const {
     companyId,
@@ -31,13 +32,11 @@ const calculateLeaveDays = async (startDate, endDate, opts = {}) => {
     countHolidays = false,
   } = opts;
 
-  // Build set of holiday dates (as YYYY-MM-DD strings)
+  // Build set of holiday day-keys (YYYY-MM-DD)
   let holidaySet = new Set();
 
   if (!countHolidays) {
-    const year = start.getFullYear();
-    const years = new Set([year]);
-    if (end.getFullYear() !== year) years.add(end.getFullYear());
+    const years = new Set([civilYear(start), civilYear(end)]);
 
     // Mandatory holidays: company-wide + location-specific
     const mandatoryFilter = {
@@ -52,7 +51,7 @@ const calculateLeaveDays = async (startDate, endDate, opts = {}) => {
     };
     const mandatoryHolidays = await PublicHoliday.find(mandatoryFilter).select('date').lean();
     mandatoryHolidays.forEach((h) => {
-      holidaySet.add(new Date(h.date).toISOString().split('T')[0]);
+      holidaySet.add(dayKey(h.date));
     });
 
     // Optional holidays picked by this employee
@@ -63,27 +62,19 @@ const calculateLeaveDays = async (startDate, endDate, opts = {}) => {
         .lean();
       optPicked.forEach((o) => {
         if (o.holiday_id?.date) {
-          holidaySet.add(new Date(o.holiday_id.date).toISOString().split('T')[0]);
+          holidaySet.add(dayKey(o.holiday_id.date));
         }
       });
     }
   }
 
-  const DAY_MAP = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
-
   let days = 0;
-  const current = new Date(start);
-
-  while (current <= end) {
-    const dayName   = DAY_MAP[current.getDay()];
-    const isWeekend = weekendDays.includes(dayName);
-    const dateStr   = current.toISOString().split('T')[0];
-    const isHoliday = holidaySet.has(dateStr);
+  for (const current of eachCivilDay(start, end)) {
+    const isWeekend = weekendDays.includes(dayOfWeek(current));
+    const isHoliday = holidaySet.has(dayKey(current));
 
     const skip = (!countWeekends && isWeekend) || (!countHolidays && isHoliday);
     if (!skip) days++;
-
-    current.setDate(current.getDate() + 1);
   }
 
   return days;

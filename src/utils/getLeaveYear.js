@@ -14,10 +14,14 @@
  * @param {number} fiscalYearStart  1–12  (1=Jan, 4=Apr …)
  * @returns {number}
  */
+const { parseCivil } = require('./civilDate');
+
 function getLeaveYear(date, resetCycle, fiscalYearStart = 1) {
-  const d       = new Date(date);
-  const month   = d.getMonth() + 1; // 1–12
-  const calYear = d.getFullYear();
+  // Use the civil (timezone-stable) calendar day so the year bucket doesn't
+  // shift by the server offset at fiscal/calendar boundaries.
+  const d       = parseCivil(date) ?? new Date(date);
+  const month   = d.getUTCMonth() + 1; // 1–12
+  const calYear = d.getUTCFullYear();
 
   if (resetCycle === 'fiscal_year') {
     return month >= fiscalYearStart ? calYear : calYear - 1;

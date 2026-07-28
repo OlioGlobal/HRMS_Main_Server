@@ -33,11 +33,13 @@ const advanceCandidate = catchAsync(async (req, res) => {
 
 const activateCandidate = catchAsync(async (req, res) => {
   const result = await svc.activate(req.user.companyId, req.params.id, {
+    userId:          req.user.userId,
     joiningDate:     req.body.joiningDate,
     probationMonths: req.body.probationMonths,
     email:           req.body.email,
     portalAccess:    req.body.portalAccess,
     roleIds:         req.body.roleIds,
+    documentMappings: req.body.documentMappings,
   });
   sendSuccess(res, {
     message: `Employee ${result.candidate.employeeId} activated successfully.`,

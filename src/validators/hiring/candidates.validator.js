@@ -67,6 +67,12 @@ const createCandidateValidator = [
     .if((v) => v != null)
     .isMongoId().withMessage('Invalid department ID.'),
 
+  body('probationMonths')
+    .optional({ nullable: true })
+    .customSanitizer((v) => (v === '' ? null : v))
+    .if((v) => v != null)
+    .isInt({ min: 0, max: 24 }).withMessage('Probation months must be between 0 and 24.'),
+
   validate,
 ];
 

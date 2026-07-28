@@ -8,6 +8,7 @@ const Company       = require('../../models/Company');
 const Department    = require('../../models/Department');
 const Designation   = require('../../models/Designation');
 const Location      = require('../../models/Location');
+const { decryptSalaryDoc } = require('../../utils/encryption');
 const { format }    = require('date-fns');
 
 const _fmt = (date) => date ? format(new Date(date), 'dd MMMM yyyy') : '';
@@ -34,31 +35,48 @@ const resolveVariables = async (companyId, employeeId) => {
       .populate('location_id',   'name address city state')
       .populate('workPolicy_id')
       .populate('leaveTemplate_id', 'name')
-      .populate('reportingManager_id', 'firstName lastName email designation_id')
+      .populate({
+        path:    'reportingManager_id',
+        select:  'firstName lastName email designation_id',
+        populate: { path: 'designation_id', select: 'name' },
+      })
       .lean(),
     Company.findById(companyId).lean(),
   ]);
 
   if (!employee) return {};
 
-  const salary = await EmployeeSalary.findOne({ employee_id: employeeId, status: 'active' })
-    .sort({ effectiveDate: -1 })
-    .lean();
+  // .lean() bypasses the model's decrypt hooks, so decrypt the salary doc manually —
+  // otherwise ctcMonthly/ctcAnnual/component amounts stay as 'ENC_v1:...' → Number() → NaN
+  const salary = decryptSalaryDoc(
+    await EmployeeSalary.findOne({ employee_id: employeeId, status: 'active' })
+      .sort({ effectiveDate: -1 })
+      .lean()
+  );
 
   // ─── Leave balances ────────────────────────────────────────────────────────
   let leaveMap = {};
+  let earnedBalances = []; // paid + comp_off only (unpaid excluded from "earned")
   if (employee.leaveTemplate_id) {
     const balances = await LeaveBalance.find({ employee_id: employeeId, company_id: companyId })
-      .populate('leaveType_id', 'name code')
+      .populate('leaveType_id', 'name code type')
       .lean();
 
     for (const b of balances) {
-      const code = b.leaveType_id?.code?.toLowerCase() ?? '';
-      const name = b.leaveType_id?.name ?? '';
-      leaveMap[code] = b.allocated ?? 0;
+      const lt   = b.leaveType_id;
+      const code = lt?.code?.toLowerCase() ?? '';
+      const name = lt?.name ?? '';
+      const allocated = b.allocated ?? 0;
+      leaveMap[code] = allocated;
       leaveMap[`${code}_name`] = name;
+      if (lt && lt.type !== 'unpaid') {
+        earnedBalances.push({ code: lt.code, name, allocated });
+      }
     }
   }
+  // Dynamic totals/breakdown so the letter never contradicts itself
+  const leaveTotalEarned = earnedBalances.reduce((s, b) => s + b.allocated, 0);
+  const leaveBreakdown   = earnedBalances.map(b => `${b.code} – ${b.allocated} days`).join(', ');
 
   // ─── Reporting manager ─────────────────────────────────────────────────────
   const mgr = employee.reportingManager_id;
@@ -110,6 +128,14 @@ const resolveVariables = async (companyId, employeeId) => {
     'employee.joiningDate':    _fmt(employee.joiningDate),
     'employee.employmentType': employee.employmentType ?? '',
     'employee.probationMonths':employee.probationDays ? Math.round(employee.probationDays / 30) : '',
+    // Human-readable probation phrase for letters ("3 months" / "no probation period"),
+    // defaults to "3 months" when not yet set on the record.
+    'employee.probationPeriod': (() => {
+      const m = employee.probationDays != null ? Math.round(employee.probationDays / 30) : null;
+      if (m == null) return '3 months';
+      if (m === 0)   return 'no probation period';
+      return `${m} month${m > 1 ? 's' : ''}`;
+    })(),
     'employee.noticePeriodDays': employee.noticePeriodDays ?? '',
     'employee.workMode':       employee.workMode ?? '',
 
@@ -127,8 +153,13 @@ const resolveVariables = async (companyId, employeeId) => {
       : '',
 
     // Reporting manager
-    'employee.managerName':    mgr ? `${mgr.firstName} ${mgr.lastName}` : '',
-    'employee.managerEmail':   mgr?.email ?? '',
+    'employee.managerName':        mgr ? `${mgr.firstName} ${mgr.lastName}` : '',
+    'employee.managerEmail':       mgr?.email ?? '',
+    'employee.managerDesignation': mgr?.designation_id?.name ?? '',
+    // Formatted one-line "Name – Designation | email", with a graceful fallback
+    'employee.reportingManagerLine': mgr
+      ? `${mgr.firstName} ${mgr.lastName}${mgr.designation_id?.name ? ` – ${mgr.designation_id.name}` : ''}${mgr.email ? ` | ${mgr.email}` : ''}`
+      : 'To be communicated separately',
 
     // Company
     'company.name':    company?.name ?? '',
@@ -143,15 +174,17 @@ const resolveVariables = async (companyId, employeeId) => {
     'company.state':   company?.state ?? '',
     'company.pincode': company?.pincode ?? '',
 
-    // Salary — fall back to roughGross if no EmployeeSalary record exists
-    'salary.ctcMonthly':  salary ? _money(salary.ctcMonthly)  : _money(employee.roughGross),
-    'salary.grossMonthly': salary ? _money(salary.ctcMonthly) : _money(employee.roughGross),
-    'salary.ctcAnnual':   salary ? _money(salary.ctcAnnual)   : _money(employee.roughGross != null ? employee.roughGross * 12 : null),
-    'salary.ctc':         salary ? _money(salary.ctcAnnual)   : _money(employee.roughGross != null ? employee.roughGross * 12 : null),
-    'salary.ctcMonthlyRaw': salary ? (salary.ctcMonthly ?? '') : (employee.roughGross ?? ''),
-    'salary.ctcAnnualRaw':  salary ? (salary.ctcAnnual  ?? '') : (employee.roughGross != null ? employee.roughGross * 12 : ''),
+    // Salary — fall back to roughGross if no EmployeeSalary record exists.
+    // roughGross is an ANNUAL CTC estimate (that's how the create form collects it),
+    // so monthly = roughGross / 12.
+    'salary.ctcMonthly':  salary ? _money(salary.ctcMonthly)  : _money(employee.roughGross != null ? Math.round(employee.roughGross / 12) : null),
+    'salary.grossMonthly': salary ? _money(salary.ctcMonthly) : _money(employee.roughGross != null ? Math.round(employee.roughGross / 12) : null),
+    'salary.ctcAnnual':   salary ? _money(salary.ctcAnnual)   : _money(employee.roughGross),
+    'salary.ctc':         salary ? _money(salary.ctcAnnual)   : _money(employee.roughGross),
+    'salary.ctcMonthlyRaw': salary ? (salary.ctcMonthly ?? '') : (employee.roughGross != null ? Math.round(employee.roughGross / 12) : ''),
+    'salary.ctcAnnualRaw':  salary ? (salary.ctcAnnual  ?? '') : (employee.roughGross ?? ''),
     'salary.table': earningsTable || (employee.roughGross != null
-      ? `<table border="1" cellpadding="6" cellspacing="0" style="border-collapse:collapse;width:100%"><thead><tr style="background:#f5f5f5"><th>Component</th><th>Amount (₹)</th></tr></thead><tbody><tr><td>Gross Monthly Salary</td><td>${_money(employee.roughGross)}</td></tr><tr style="font-weight:bold"><td>Fixed CTC (Per Annum)</td><td>${_money(employee.roughGross * 12)}</td></tr></tbody></table>`
+      ? `<table border="1" cellpadding="6" cellspacing="0" style="border-collapse:collapse;width:100%"><thead><tr style="background:#f5f5f5"><th>Component</th><th>Amount (₹)</th></tr></thead><tbody><tr><td>Gross Monthly Salary</td><td>${_money(Math.round(employee.roughGross / 12))}</td></tr><tr style="font-weight:bold"><td>Fixed CTC (Per Annum)</td><td>${_money(employee.roughGross)}</td></tr></tbody></table>`
       : ''),
     ...Object.fromEntries(Object.entries(salaryComponents).map(([k, v]) => [`salary.${k}`, v])),
 
@@ -172,6 +205,9 @@ const resolveVariables = async (companyId, employeeId) => {
     'leave.sickLeaves':     leaveMap['sl']  ?? '',
     'leave.maternityLeaves': leaveMap['ml'] ?? '',
     'leave.paternityLeaves': leaveMap['pl'] ?? '',
+    // Dynamic total + breakdown built from the employee's actual paid balances
+    'leave.totalEarned':    leaveTotalEarned || '',
+    'leave.breakdown':      leaveBreakdown,
 
     // Meta
     'meta.today':         _fmt(new Date()),

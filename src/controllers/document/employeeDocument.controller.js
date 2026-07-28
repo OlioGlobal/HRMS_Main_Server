@@ -102,6 +102,12 @@ const myChecklist = catchAsync(async (req, res) => {
   sendSuccess(res, { data: { checklist: list } });
 });
 
+const myCompanyDocuments = catchAsync(async (req, res) => {
+  const emp = await _resolveEmployee(req.user.companyId, req.user.userId);
+  const list = await service.getMyCompanyDocuments(req.user.companyId, emp._id);
+  sendSuccess(res, { data: { documents: list } });
+});
+
 // Employee self-service upload
 const myUpload = catchAsync(async (req, res) => {
   if (!req.file) throw new AppError('No file uploaded', 400);
@@ -182,6 +188,7 @@ module.exports = {
   compliance,
   myDocuments,
   myChecklist,
+  myCompanyDocuments,
   myUpload,
   myDownload,
   myDelete,

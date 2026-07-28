@@ -4,6 +4,8 @@ const Employee    = require('../../models/Employee');
 const WorkPolicy  = require('../../models/WorkPolicy');
 const AppError    = require('../../utils/AppError');
 const eventBus    = require('../../utils/eventBus');
+const { parseCivil, dayKeyInTZ, dayOfWeek, diffDays, todayCivil } = require('../../utils/civilDate');
+const { resolveEmployeeTimezone } = require('../../utils/resolveTimezone');
 
 const toObjectId = (id) => new mongoose.Types.ObjectId(id);
 
@@ -12,17 +14,18 @@ const applyWFH = async (companyId, employeeId, body) => {
   const employee = await Employee.findOne({ _id: employeeId, company_id: companyId }).lean();
   if (!employee) throw new AppError('Employee not found.', 404);
 
-  const startDate = new Date(body.startDate || body.date);
-  startDate.setHours(0, 0, 0, 0);
-  const endDate = new Date(body.endDate || body.startDate || body.date);
-  endDate.setHours(0, 0, 0, 0);
+  // Employee's location timezone → company → UTC
+  const tz = await resolveEmployeeTimezone(employee, companyId);
+
+  // Civil (noon-UTC) day values — timezone-stable
+  const startDate = parseCivil(body.startDate || body.date);
+  const endDate   = parseCivil(body.endDate || body.startDate || body.date);
+  if (!startDate || !endDate) throw new AppError('Invalid WFH date.', 400);
 
   if (endDate < startDate) throw new AppError('End date cannot be before start date.', 400);
 
-  // Validate date is today or in the future
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  if (startDate < today) {
+  // Validate date is today or in the future (in the company timezone)
+  if (startDate < todayCivil(tz)) {
     throw new AppError('WFH request date must be today or in the future.', 400);
   }
 
@@ -48,9 +51,9 @@ const applyWFH = async (companyId, employeeId, body) => {
     reason:      body.reason || null,
   });
 
-  const diffDays = Math.round((endDate - startDate) / (1000 * 60 * 60 * 24)) + 1;
+  const totalDays = diffDays(startDate, endDate) + 1;
   const result = request.toObject();
-  eventBus.emit('wfh.requested', { companyId, wfhRequest: { ...result, totalDays: diffDays }, employee });
+  eventBus.emit('wfh.requested', { companyId, wfhRequest: { ...result, totalDays }, employee });
   return result;
 };
 
@@ -62,14 +65,16 @@ const myRequests = async (companyId, employeeId, { status, month, year, page = 1
   if (year && month) {
     const m = Number(month);
     const y = Number(year);
+    // Civil startDates are noon-UTC; use UTC month bounds
     filter.startDate = {
-      $gte: new Date(y, m - 1, 1),
-      $lt:  new Date(y, m, 1),
+      $gte: new Date(Date.UTC(y, m - 1, 1, 0, 0, 0)),
+      $lt:  new Date(Date.UTC(y, m, 1, 0, 0, 0)),
     };
   } else if (year) {
+    const y = Number(year);
     filter.startDate = {
-      $gte: new Date(`${year}-01-01`),
-      $lte: new Date(`${year}-12-31`),
+      $gte: new Date(Date.UTC(y, 0, 1, 0, 0, 0)),
+      $lte: new Date(Date.UTC(y, 11, 31, 23, 59, 59)),
     };
   }
 
@@ -234,7 +239,7 @@ const cancelRequest = async (companyId, requestId, employeeId) => {
 // ─── Is WFH Authorized (for clock-in service) ───────────────────────────────
 const isWFHAuthorized = async (companyId, employeeId, date) => {
   const employee = await Employee.findOne({ _id: employeeId, company_id: companyId })
-    .select('workMode workPolicy_id')
+    .select('workMode workPolicy_id location_id company_id')
     .lean();
 
   if (!employee) return { authorized: false, reason: 'Employee not found.' };
@@ -249,6 +254,11 @@ const isWFHAuthorized = async (companyId, employeeId, date) => {
     return { authorized: true, reason: 'Employee work mode is field.' };
   }
 
+  // Resolve the civil calendar day in the employee's location timezone
+  const tz        = await resolveEmployeeTimezone(employee, companyId);
+  const civilDay  = parseCivil(dayKeyInTZ(date, tz)); // noon-UTC of that local day
+  const dayName   = dayOfWeek(civilDay);
+
   // 3. Check work policy hybrid + wfhDays
   if (employee.workPolicy_id) {
     const policy = await WorkPolicy.findById(employee.workPolicy_id)
@@ -256,25 +266,18 @@ const isWFHAuthorized = async (companyId, employeeId, date) => {
       .lean();
 
     if (policy && policy.hybridEnabled && policy.wfhDays?.length > 0) {
-      const checkDate = new Date(date);
-      const dayNames = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
-      const dayOfWeek = dayNames[checkDate.getDay()];
-
-      if (policy.wfhDays.includes(dayOfWeek)) {
-        return { authorized: true, reason: `${dayOfWeek} is a scheduled WFH day per work policy.` };
+      if (policy.wfhDays.includes(dayName)) {
+        return { authorized: true, reason: `${dayName} is a scheduled WFH day per work policy.` };
       }
     }
   }
 
-  // 4. Check approved WFH request that covers this date
-  const checkDate = new Date(date);
-  checkDate.setHours(0, 0, 0, 0);
-
+  // 4. Check approved WFH request that covers this civil day
   const approvedRequest = await WFHRequest.findOne({
     company_id:  companyId,
     employee_id: employeeId,
-    startDate:   { $lte: checkDate },
-    endDate:     { $gte: checkDate },
+    startDate:   { $lte: civilDay },
+    endDate:     { $gte: civilDay },
     status:      'approved',
   }).lean();
 

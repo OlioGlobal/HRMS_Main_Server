@@ -62,7 +62,7 @@ ${PB}
 <p style="${S}">Your title will be <strong>{{employee.designation}}</strong>. This is a full-time position.</p>
 
 <p style="font-weight:bold;margin:10px 0 4px;">Primary Reporting Manager (For overall operations, systems, processes)</p>
-<p style="margin-bottom:10px;">Mr. Suraj Shinde – Operations Head &amp; SEO Manager | suraj@olioglobaladtech.com</p>
+<p style="margin-bottom:10px;">{{employee.reportingManagerLine}}</p>
 
 <p style="font-weight:bold;margin:0 0 4px;">For Escalations &amp; Strategic Inputs</p>
 <p style="margin-bottom:14px;">Mr. Amol D. Salke – Director Marketing Head (Amol Salke, Siddhesh Mane, Suraj Shinde)</p>
@@ -112,8 +112,8 @@ ${PB}
 <p style="${S}">The policy is designed to encourage all team members to take the vacation time they have earned each financial year. The {{company.name}} administration feels it is important for team members' well-being that they take their vacations.</p>
 
 <p style="font-weight:bold;margin:14px 0 8px;">Summary</p>
-<p style="margin-bottom:4px;">→ &nbsp;Total Earned leaves per year* &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;: &nbsp;<strong>{{leave.annualLeaves}} Days</strong></p>
-<p style="margin-bottom:4px;padding-left:20px;">(AL – 15 days, CL – 6 days, SL – 7 days.)</p>
+<p style="margin-bottom:4px;">→ &nbsp;Total Earned leaves per year* &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;: &nbsp;<strong>{{leave.totalEarned}} Days</strong></p>
+<p style="margin-bottom:4px;padding-left:20px;">({{leave.breakdown}})</p>
 <p style="margin-bottom:4px;">→ &nbsp;Total Festive Holidays per year &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;: &nbsp;<strong>10 Days</strong></p>
 <p style="margin-bottom:14px;">→ &nbsp;Special Day (Birthday or Anniversary Day) &nbsp;: &nbsp;<strong>01 Day</strong> (Included Total Earned leaves)</p>
 
@@ -121,7 +121,7 @@ ${PB}
 
 <p style="${H}">LEAVES AND HOLIDAY POLICY</p>
 <ol style="margin:0 0 8px 18px;padding:0;">
-  <li style="margin-bottom:10px;text-align:justify;"><strong>Annual Leave Entitlement:</strong> You are entitled to {{leave.annualLeaves}} days of paid leave per calendar year, which includes sick leave and all planned absences. All leave requests must be submitted to your manager via email and HRM app with a minimum of 10 days' advance notice and require prior approval.</li>
+  <li style="margin-bottom:10px;text-align:justify;"><strong>Annual Leave Entitlement:</strong> You are entitled to {{leave.totalEarned}} days of paid leave per calendar year, which includes sick leave and all planned absences. All leave requests must be submitted to your manager via email and HRM app with a minimum of 10 days' advance notice and require prior approval.</li>
   <li style="margin-bottom:10px;text-align:justify;"><strong>Festive Holidays:</strong> You will receive 10 days of festive holidays annually. The holiday schedule will be published and communicated by year-end via email or HRM app.</li>
   <li style="margin-bottom:10px;text-align:justify;"><strong>Special Day Off:</strong> You are entitled to one special day off annually for your birthday or wedding anniversary (based on official dates). This benefit does not apply if the date falls on a Sunday. Personal days are separate from your annual leave entitlement.</li>
   <li style="margin-bottom:10px;text-align:justify;"><strong>Leave Policy:</strong> Leave is applicable from 1st April to 31st March, in line with the financial year.Unused leave cannot be carried forward to the next year and will be forfeited.</li>
@@ -130,7 +130,7 @@ ${PB}
 ${PB}
 
 <p style="${H}" class="page-top-section">PROBATION PERIOD</p>
-<p style="${S}">You will be on probation for <strong>{{manual.probationMonths}}</strong>. Your confirmation will be communicated to you over email or in person. {{company.name}} reserves the right to terminate your employment in case your performance, behavior and/or conduct during the probation period is found unsatisfactory.</p>
+<p style="${S}">You will be on probation for <strong>{{employee.probationPeriod}}</strong>. Your confirmation will be communicated to you over email or in person. {{company.name}} reserves the right to terminate your employment in case your performance, behavior and/or conduct during the probation period is found unsatisfactory.</p>
 
 <p style="${H}">NOTICE PERIOD &amp; TERMINATION POLICY</p>
 <p style="${S}">During your employment with {{company.name}}, including probation / training, either you or {{company.name}} can terminate the appointment by giving 60 calendar days written notice or 2 month's basic salary in lieu of the notice. {{company.name}} reserves the right, if it is in the interest of the business and current assignment, to ask you to complete your notice period or decide whether your existing earned vacation or basic salary in lieu of notice period may be adjusted against the entire or partial notice period.</p>

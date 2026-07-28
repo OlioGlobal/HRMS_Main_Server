@@ -8,6 +8,8 @@ const AppError     = require('../../utils/AppError');
 const eventBus     = require('../../utils/eventBus');
 const { calculateLeaveDays } = require('../../utils/calculateLeaveDays');
 const { getLeaveYear }       = require('../../utils/getLeaveYear');
+const { parseCivil, diffDays, todayCivil } = require('../../utils/civilDate');
+const { findWorkedDayInRange } = require('../../utils/leaveAttendanceLink');
 
 const toObjectId = (id) => new mongoose.Types.ObjectId(id);
 
@@ -21,6 +23,8 @@ const applyLeave = async (companyId, employeeId, body) => {
 
   const company = await Company.findById(companyId).lean();
   const weekendDays = company.settings?.leave?.weekendDays ?? ['SAT', 'SUN'];
+  const companyTz   = company.settings?.timezone || null;
+  const today       = todayCivil(companyTz);
 
   // ── Gender check ──
   if (leaveType.applicableGender !== 'all' && employee.gender !== leaveType.applicableGender) {
@@ -29,8 +33,7 @@ const applyLeave = async (companyId, employeeId, body) => {
 
   // ── Probation check ──
   if (leaveType.restrictDuringProbation && employee.probationEndDate) {
-    const today = new Date();
-    if (today < new Date(employee.probationEndDate)) {
+    if (today.getTime() < parseCivil(employee.probationEndDate).getTime()) {
       throw new AppError('This leave type is not available during probation period.', 400);
     }
   }
@@ -45,10 +48,10 @@ const applyLeave = async (companyId, employeeId, body) => {
     throw new AppError('Half-day is not allowed for this leave type.', 400);
   }
 
-  const startDate = new Date(body.startDate);
-  const endDate   = new Date(body.endDate);
-  startDate.setHours(0, 0, 0, 0);
-  endDate.setHours(0, 0, 0, 0);
+  // Civil (noon-UTC) day values — timezone-stable, aligned with how holidays store dates
+  const startDate = parseCivil(body.startDate);
+  const endDate   = parseCivil(body.endDate);
+  if (!startDate || !endDate) throw new AppError('Invalid start or end date.', 400);
 
   if (endDate < startDate) throw new AppError('End date cannot be before start date.', 400);
 
@@ -59,10 +62,8 @@ const applyLeave = async (companyId, employeeId, body) => {
 
   // ── Notice period check ──
   if (leaveType.minDaysNotice > 0) {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const diffDays = Math.ceil((startDate - today) / (1000 * 60 * 60 * 24));
-    if (diffDays < leaveType.minDaysNotice) {
+    const noticeDays = diffDays(today, startDate);
+    if (noticeDays < leaveType.minDaysNotice) {
       throw new AppError(`This leave requires at least ${leaveType.minDaysNotice} day(s) advance notice.`, 400);
     }
   }
@@ -99,6 +100,16 @@ const applyLeave = async (companyId, employeeId, body) => {
   }).lean();
   if (overlap) {
     throw new AppError('You already have a leave request overlapping these dates.', 400);
+  }
+
+  // ── Attendance conflict ──
+  // A full-day leave contradicts a day already clocked in. A half-day leave is
+  // allowed (the employee works the other half of the day).
+  if (!body.isHalfDay) {
+    const workedDay = await findWorkedDayInRange(companyId, employeeId, startDate, endDate, companyTz);
+    if (workedDay) {
+      throw new AppError(`You have already clocked in on ${workedDay}; you cannot take full-day leave for a day you've worked.`, 400);
+    }
   }
 
   // ── Balance check ──
@@ -159,9 +170,10 @@ const getMyLeaves = async (companyId, employeeId, { status, year, page = 1, limi
   const filter = { company_id: companyId, employee_id: employeeId };
   if (status) filter.status = status;
   if (year) {
+    // Civil-day startDates are stored at noon-UTC; use full-UTC-day bounds
     filter.startDate = {
-      $gte: new Date(`${year}-01-01`),
-      $lte: new Date(`${year}-12-31`),
+      $gte: new Date(Date.UTC(Number(year), 0, 1, 0, 0, 0)),
+      $lte: new Date(Date.UTC(Number(year), 11, 31, 23, 59, 59)),
     };
   }
 
@@ -261,12 +273,13 @@ const listAllRequests = async (companyId, { status, department, year, fromDate, 
   if (status) filter.status = status;
   if (fromDate || toDate) {
     filter.startDate = {};
-    if (fromDate) filter.startDate.$gte = new Date(fromDate);
-    if (toDate)   filter.startDate.$lte = new Date(toDate);
+    // Stored startDates are civil noon-UTC, so parseCivil bounds match inclusively
+    if (fromDate) filter.startDate.$gte = parseCivil(fromDate);
+    if (toDate)   filter.startDate.$lte = parseCivil(toDate);
   } else if (year) {
     filter.startDate = {
-      $gte: new Date(`${year}-01-01`),
-      $lte: new Date(`${year}-12-31`),
+      $gte: new Date(Date.UTC(Number(year), 0, 1, 0, 0, 0)),
+      $lte: new Date(Date.UTC(Number(year), 11, 31, 23, 59, 59)),
     };
   }
 
