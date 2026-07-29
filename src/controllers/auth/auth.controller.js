@@ -13,10 +13,11 @@ const signup = catchAsync(async (req, res) => {
 
   sendSuccess(res, {
     status: 201,
-    message: 'Company registered successfully. Please log in.',
+    message: 'Company registered successfully. Your account is pending activation by an administrator.',
     data: {
-      company: { id: company._id, name: company.name, slug: company.slug, plan: company.plan },
+      company: { id: company._id, name: company.name, slug: company.slug, isActive: company.isActive },
       user:    { id: user._id, firstName: user.firstName, lastName: user.lastName, email: user.email },
+      pendingActivation: true,
     },
   });
 });

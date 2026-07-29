@@ -9,6 +9,7 @@ const {
   getAttendanceSummary,
   isMidMonthJoiner,
 } = require('../../utils/payrollHelpers');
+const { decryptSalaryDoc } = require('../../utils/encryption');
 
 /**
  * Calculate payroll for a single employee.
@@ -42,11 +43,15 @@ const calculatePayrollRecord = async (employee, month, year, companyId) => {
   }
 
   // ─── 2. Get active salary ────────────────────────────────────────────────
-  const salary = await EmployeeSalary.findOne({
+  // .lean() bypasses the model's decrypt hooks, so decrypt manually — otherwise the
+  // encrypted ctcMonthly / component monthlyAmount go straight into the math as
+  // 'ENC_v1:...' strings and every amount computes to NaN. decryptSalaryDoc also
+  // passes plain numbers through unchanged (legacy records).
+  const salary = decryptSalaryDoc(await EmployeeSalary.findOne({
     company_id: companyId,
     employee_id: employee._id,
     status: 'active',
-  }).lean();
+  }).lean());
 
   if (!salary) {
     return buildWarningRecord(employee, month, year, companyId, ['No salary assigned']);

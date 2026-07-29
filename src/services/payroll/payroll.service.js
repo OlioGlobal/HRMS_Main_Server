@@ -105,6 +105,12 @@ const processRun = async (runId, companyId) => {
     }
     const allCount = records.length + preservedRecords.length;
 
+    // Snapshot the payslip config as-of processing time, so later config edits don't
+    // change how these payslips render.
+    const Company = require('../../models/Company');
+    const companyDoc = await Company.findById(companyId).select('settings.payslip').lean();
+    run.payslipConfigSnapshot = companyDoc?.settings?.payslip || null;
+
     // Update run summary
     run.status          = 'review';
     run.totalEmployees  = allCount;

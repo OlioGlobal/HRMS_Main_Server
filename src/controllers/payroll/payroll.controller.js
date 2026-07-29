@@ -125,8 +125,8 @@ const streamPayslipPdf = async (res, employeeId, companyId, month, year) => {
   const y = parseInt(year, 10);
   if (!m || !y) throw new AppError('month and year are required.', 400);
 
-  const { record, employee, company } = await payrollService.getPayslipContext(employeeId, companyId, m, y);
-  const html = buildPayslipHtml({ record, employee, company });
+  const { record, employee, company, run } = await payrollService.getPayslipContext(employeeId, companyId, m, y);
+  const html = buildPayslipHtml({ record, employee, company, configSnapshot: run?.payslipConfigSnapshot });
   const pdf  = await htmlToPdfBuffer(html);
 
   res.setHeader('Content-Type', 'application/pdf');
@@ -145,10 +145,10 @@ const sendPayslipEmail = catchAsync(async (req, res) => {
   if (!employee.user_id?.email) throw new AppError('Employee has no email address.', 400);
 
   const { sendEmail } = require('../../utils/email');
-  const { record, company } = await payrollService.getPayslipContext(employee._id, req.user.companyId, month, year);
+  const { record, company, run } = await payrollService.getPayslipContext(employee._id, req.user.companyId, month, year);
 
   // The formal payslip travels as a PDF attachment; the email body is a short note.
-  const html = buildPayslipHtml({ record, employee, company });
+  const html = buildPayslipHtml({ record, employee, company, configSnapshot: run?.payslipConfigSnapshot });
   const pdf  = await htmlToPdfBuffer(html);
   const monthName = MONTHS[month - 1];
   const empName = `${employee.firstName} ${employee.lastName}`;

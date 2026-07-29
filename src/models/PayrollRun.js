@@ -38,6 +38,10 @@ const payrollRunSchema = new mongoose.Schema(
     lockedAt:   { type: Date, default: null },
 
     notes: { type: String, trim: true, maxlength: 500, default: null },
+
+    // Frozen copy of company.settings.payslip captured when the run was processed,
+    // so later config edits don't re-style already-issued payslips. Null on old runs.
+    payslipConfigSnapshot: { type: mongoose.Schema.Types.Mixed, default: null },
   },
   { timestamps: true }
 );

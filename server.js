@@ -9,6 +9,10 @@ const Company                        = require('./src/models/Company');
 const { registerNotificationJobs }  = require('./src/services/ruleEngine/registerJobs');
 const { seedDefaultHiringPipeline } = require('./src/seeders/hiringPipeline.seeder');
 const { seedDefaultLetterTemplates } = require('./src/seeders/letterTemplates.seeder');
+const { seedPlatformAdmin }         = require('./src/seeders/platformAdmin.seeder');
+const { seedDefaultPlans }          = require('./src/seeders/plans.seeder');
+const { grandfatherTenants }        = require('./src/seeders/grandfatherTenants.seeder');
+const tenantExpiry                  = require('./src/services/admin/tenantExpiry.service');
 
 const PORT = process.env.PORT || 5000;
 
@@ -30,6 +34,14 @@ const startServer = async () => {
   if (companies.length) {
     console.log(`[Seeder] Synced default role-permissions for ${companies.length} company(ies).`);
   }
+
+  // ─── Platform / tenant-subscription bootstrap ────────────────────────────────
+  // Seed the platform Super Admin + default plans, grandfather existing companies
+  // onto the Legacy plan, then start the exact-time expiry worker (with reconcile).
+  await seedPlatformAdmin();
+  await seedDefaultPlans();
+  await grandfatherTenants();
+  await tenantExpiry.startExpiryWorker();
 
   // Register all BullMQ jobs (notifications + auto-absent + document-expiry + event listeners)
   await registerNotificationJobs();

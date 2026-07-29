@@ -103,16 +103,17 @@ const DEFAULT_RULES = [
     templates: {
       inApp: {
         title: 'Leave {{status}}',
-        body: '{{employeeName}} applied for {{leaveType}} ({{startDate}} - {{endDate}}). Status: {{status}}.',
+        body: '{{employeeName}} applied for {{leaveType}} ({{startDate}} - {{endDate}}, {{duration}}). Status: {{status}}.',
       },
       email: {
-        subject: 'Leave {{status}} - {{employeeName}}',
+        subject: 'Leave {{status}} - {{employeeName}} ({{duration}})',
         body: wrapEmail(
           '<h2>Leave {{status}}</h2>' +
           '<p>{{employeeName}} has a leave update.</p>' +
           '<div class="highlight"><p><strong>Employee:</strong> {{employeeName}}<br/>' +
           '<strong>Leave Type:</strong> {{leaveType}}<br/>' +
           '<strong>Period:</strong> {{startDate}} - {{endDate}}<br/>' +
+          '<strong>Duration:</strong> {{duration}}<br/>' +
           '<strong>Reason:</strong> {{reason}}<br/>' +
           '<strong>Status:</strong> {{status}}</p></div>' +
           '{{#if approveUrl}}' +
@@ -375,14 +376,15 @@ const DEFAULT_RULES = [
     templates: {
       inApp: {
         title: 'Leave Auto-Approved',
-        body: 'Your {{leaveType}} ({{startDate}} - {{endDate}}) has been auto-approved after {{autoApproveDays}} day(s).',
+        body: 'Your {{leaveType}} ({{startDate}} - {{endDate}}, {{duration}}) has been auto-approved after {{autoApproveDays}} day(s).',
       },
       email: {
-        subject: 'Leave Auto-Approved - {{leaveType}}',
+        subject: 'Leave Auto-Approved - {{leaveType}} ({{duration}})',
         body: wrapEmail(
           '<h2>Leave Auto-Approved</h2>' +
           '<p>Your <strong>{{leaveType}}</strong> request has been automatically approved.</p>' +
           '<div class="highlight"><p><strong>Period:</strong> {{startDate}} - {{endDate}}<br/>' +
+          '<strong>Duration:</strong> {{duration}}<br/>' +
           '<strong>Reason:</strong> No action taken within {{autoApproveDays}} day(s).</p></div>'
         ),
       },

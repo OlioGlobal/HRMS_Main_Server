@@ -84,6 +84,9 @@ const findRecipients = async (companyId, contextData, config) => {
               leaveType: lt.name,
               startDate: format(new Date(request.startDate), 'dd MMM yyyy'),
               endDate: format(new Date(request.endDate), 'dd MMM yyyy'),
+              duration: request.isHalfDay
+                ? `Half Day (${request.halfDaySession === 'afternoon' ? 'Afternoon' : 'Morning'})`
+                : (request.totalDays === 1 ? 'Full Day (1 day)' : `${request.totalDays} days`),
               autoApproveDays: lt.autoApproveDays,
             },
             actionUrl: '/dashboard/leave/my-leaves',

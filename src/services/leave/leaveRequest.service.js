@@ -71,6 +71,20 @@ const applyLeave = async (companyId, employeeId, body) => {
   // ── Calculate total days ──
   let totalDays;
   if (body.isHalfDay) {
+    // A half-day must still fall on a WORKING day. Compute the working-day count for
+    // the single date and reject weekends/holidays — the full-day path gets this via
+    // calculateLeaveDays, but the half-day path used to skip it and always take 0.5.
+    const workingDays = await calculateLeaveDays(startDate, startDate, {
+      companyId,
+      employeeId,
+      locationId: employee.location_id || null,
+      weekendDays,
+      countWeekends: leaveType.countWeekends,
+      countHolidays: leaveType.countHolidays,
+    });
+    if (workingDays <= 0) {
+      throw new AppError('Half-day leave cannot be taken on a weekend or holiday.', 400);
+    }
     totalDays = 0.5;
   } else {
     totalDays = await calculateLeaveDays(startDate, endDate, {

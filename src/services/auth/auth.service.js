@@ -1,10 +1,12 @@
-const Company        = require('../../models/Company');
-const User           = require('../../models/User');
-const Role           = require('../../models/Role');
-const UserRole       = require('../../models/UserRole');
-const RolePermission = require('../../models/RolePermission');
-const AppError       = require('../../utils/AppError');
-const slugify        = require('../../utils/slugify');
+const Company            = require('../../models/Company');
+const User               = require('../../models/User');
+const Role               = require('../../models/Role');
+const UserRole           = require('../../models/UserRole');
+const RolePermission     = require('../../models/RolePermission');
+const TenantSubscription = require('../../models/TenantSubscription');
+const tenantExpiry       = require('../admin/tenantExpiry.service');
+const AppError           = require('../../utils/AppError');
+const slugify            = require('../../utils/slugify');
 const { seedDefaultRoles } = require('../../seeders/defaultRoles.seeder');
 const { seedDefaultSalaryComponents } = require('../../seeders/salaryComponents.seeder');
 const { seedDefaultLeaveTypes }     = require('../../seeders/leaveTypes.seeder');
@@ -29,10 +31,13 @@ const signup = async ({ companyName, email, password, firstName, lastName, phone
   const slugExists = await Company.findOne({ slug });
   if (slugExists) slug = `${slug}-${Date.now()}`;
 
+  // New companies start DEACTIVATED. They stay locked out until a platform
+  // Super Admin assigns a subscription plan (which flips isActive → true).
   const company = await Company.create({
     name:  companyName,
     slug,
     email: email.toLowerCase(),
+    isActive: false,
   });
 
   const user = await User.create({
@@ -91,6 +96,32 @@ const login = async ({ email, password }) => {
 
   const isMatch = await user.comparePassword(password);
   if (!isMatch) throw new AppError('Invalid email or password.', 401);
+
+  // ─── Tenant access gate ─────────────────────────────────────────────────────
+  // Enforces the subscription lifecycle: pending activation, deactivated, or
+  // expired companies cannot log in. Also acts as the durability net for the
+  // BullMQ expiry job (lazily expires if the job hasn't fired yet).
+  const company = await Company.findById(user.company_id).select('isActive');
+  if (!company) throw new AppError('Company not found.', 404);
+
+  const sub = await TenantSubscription.findOne({ company_id: user.company_id })
+    .select('status expiryDate').lean();
+
+  // Lazy expiry — subscription is past its expiry date but not yet locked.
+  if (sub && sub.status === 'active' && sub.expiryDate && new Date(sub.expiryDate) <= new Date()) {
+    await tenantExpiry.expireTenant(user.company_id, { reason: 'login-check' });
+    throw new AppError('Your subscription has expired. Please contact your administrator to renew.', 403);
+  }
+
+  if (!company.isActive) {
+    if (!sub)                      throw new AppError('Your account is pending activation. An administrator will assign a plan shortly.', 403);
+    if (sub.status === 'expired')  throw new AppError('Your subscription has expired. Please contact your administrator to renew.', 403);
+    throw new AppError('Your company account has been deactivated. Please contact your administrator.', 403);
+  }
+
+  if (sub && sub.status !== 'active') {
+    throw new AppError('Your subscription is not active. Please contact your administrator.', 403);
+  }
 
   const payload      = { userId: user._id, companyId: user.company_id, email: user.email };
   const accessToken  = generateAccessToken(payload);

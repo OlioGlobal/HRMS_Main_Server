@@ -29,8 +29,10 @@ const hiringPipelineRoutes = require('./letters/hiringPipeline.routes');
 const generatedLetterRoutes= require('./letters/generatedLetter.routes');
 const preboardingRoutes    = require('./preboarding/preboarding.routes');
 const candidateRoutes      = require('./hiring/candidates.routes');
+const adminRoutes          = require('./admin/index');
 
 // ─── Mount All Routes ──────────────────────────────────────────────────────────
+router.use('/admin',         adminRoutes);
 router.use('/auth',          authRoutes);
 router.use('/roles',         roleRoutes);
 router.use('/permissions',   permissionRoutes);

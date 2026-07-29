@@ -26,12 +26,24 @@ const findRecipients = async (companyId, contextData, config) => {
     const startDate = format(new Date(leaveRequest.startDate), 'dd MMM yyyy');
     const endDate = format(new Date(leaveRequest.endDate), 'dd MMM yyyy');
 
+    // Human-readable duration: "Half Day (Morning)", "Full Day (1 day)", or "N days"
+    let duration;
+    if (leaveRequest.isHalfDay) {
+      const session = leaveRequest.halfDaySession === 'afternoon' ? 'Afternoon' : 'Morning';
+      duration = `Half Day (${session})`;
+    } else if (leaveRequest.totalDays === 1) {
+      duration = 'Full Day (1 day)';
+    } else {
+      duration = `${leaveRequest.totalDays} days`;
+    }
+
     const variables = {
       employeeName,
       leaveType,
       startDate,
       endDate,
       totalDays: leaveRequest.totalDays,
+      duration,
       reason: leaveRequest.reason || '',
       status: leaveRequest.status,
     };

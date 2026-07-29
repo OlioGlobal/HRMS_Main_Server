@@ -46,8 +46,11 @@ const esc = (s) =>
 // record   – PayrollRecord (decrypted, plain object)
 // employee – Employee with designation_id / department_id optionally populated
 // company  – Company doc (needs name, address fields, logo, settings.*)
-const buildPayslipData = ({ record, employee, company }) => {
-  const cfg      = (company.settings && company.settings.payslip) || {};
+const buildPayslipData = ({ record, employee, company, configSnapshot }) => {
+  // Prefer the payslip config that was snapshotted when the payroll run was processed,
+  // so editing the config later never re-styles historical payslips. Falls back to the
+  // live company config (older runs without a snapshot).
+  const cfg      = configSnapshot || (company.settings && company.settings.payslip) || {};
   const currency = (company.settings && company.settings.currency) || 'USD';
   // Format using the company's currency (symbol + grouping). Falls back to a
   // plain "<CODE> 1,234" prefix if the currency code is unknown to Intl.
@@ -267,7 +270,7 @@ const renderPayslipHtml = (d) => {
 };
 
 // Convenience: assemble data + render in one call.
-const buildPayslipHtml = ({ record, employee, company }) =>
-  renderPayslipHtml(buildPayslipData({ record, employee, company }));
+const buildPayslipHtml = ({ record, employee, company, configSnapshot }) =>
+  renderPayslipHtml(buildPayslipData({ record, employee, company, configSnapshot }));
 
 module.exports = { buildPayslipData, renderPayslipHtml, buildPayslipHtml, toDataUri };
