@@ -6,6 +6,7 @@ const fs           = require('fs');
 const ctrl         = require('../../controllers/company/company.controller');
 const authenticate = require('../../middleware/authenticate');
 const authorize    = require('../../middleware/authorize');
+const authorizeRoles = require('../../middleware/authorizeRoles');
 const { updateCompanyValidator } = require('../../validators/company/company.validator');
 
 // ─── Logo Upload Storage ───────────────────────────────────────────────────────
@@ -72,6 +73,12 @@ const uploadPayslipLogo = multer({
 router.get('/',
   authenticate, authorize('company', 'view'),
   ctrl.getCompany
+);
+
+// Plan / subscription details — visible ONLY to the company's Super Admin + HR Manager
+router.get('/subscription',
+  authenticate, authorizeRoles('super-admin', 'hr-manager'),
+  ctrl.getSubscription
 );
 
 router.patch('/',

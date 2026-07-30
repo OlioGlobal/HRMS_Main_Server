@@ -45,4 +45,16 @@ const loginValidator = [
   validate,
 ];
 
-module.exports = { signupValidator, loginValidator };
+const changePasswordValidator = [
+  body('currentPassword').optional(),
+
+  body('newPassword').notEmpty().withMessage('New password is required.')
+    .isLength({ min: 8 }).withMessage('Minimum 8 characters.')
+    .matches(/[A-Z]/).withMessage('At least one uppercase letter.')
+    .matches(/[a-z]/).withMessage('At least one lowercase letter.')
+    .matches(/[0-9]/).withMessage('At least one number.'),
+
+  validate,
+];
+
+module.exports = { signupValidator, loginValidator, changePasswordValidator };

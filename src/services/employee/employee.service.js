@@ -258,6 +258,7 @@ const createEmployee = async (companyId, body, requestingUserId) => {
       email:      body.email.toLowerCase(),
       password:   tempPassword,
       status:     'active',
+      mustChangePassword: true,
     });
 
     employee.user_id = user._id;
@@ -433,6 +434,7 @@ const enablePortalAccess = async (companyId, id, requestingUserId) => {
     email:      employee.email.toLowerCase(),
     password:   tempPassword,
     status:     'active',
+    mustChangePassword: true,
   });
 
   employee.user_id = user._id;

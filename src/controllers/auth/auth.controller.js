@@ -42,6 +42,7 @@ const login = catchAsync(async (req, res) => {
         email:     user.email,
         companyId: user.company_id,
         lastLogin: user.lastLogin,
+        mustChangePassword: user.mustChangePassword,
       },
     },
   });
@@ -92,6 +93,13 @@ const resetPassword = catchAsync(async (req, res) => {
   sendSuccess(res, { status: 200, message: result.message });
 });
 
+// POST /api/auth/change-password
+const changePassword = catchAsync(async (req, res) => {
+  const { currentPassword, newPassword } = req.body;
+  const result = await authService.changePassword(req.user.userId, { currentPassword, newPassword });
+  sendSuccess(res, { status: 200, message: result.message });
+});
+
 const updatePreference = catchAsync(async (req, res) => {
   const { loginPreference } = req.body;
   if (!['dashboard', 'portal'].includes(loginPreference)) {
@@ -102,4 +110,4 @@ const updatePreference = catchAsync(async (req, res) => {
   sendSuccess(res, { message: 'Preference saved.', data: { loginPreference } });
 });
 
-module.exports = { signup, login, logout, refresh, getMe, updatePreference, forgotPassword, resetPassword };
+module.exports = { signup, login, logout, refresh, getMe, updatePreference, forgotPassword, resetPassword, changePassword };

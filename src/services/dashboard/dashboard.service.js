@@ -74,6 +74,7 @@ const getDashboardStats = async (companyId, userId, scope) => {
       code: b.leaveType_id?.code || '??',
       allocated: b.allocated + b.carryForward,
       used: b.used,
+      pending: b.pending || 0,
       remaining: b.allocated + b.carryForward + (b.adjustment || 0) - b.used - b.pending,
     }));
 
@@ -334,4 +335,39 @@ const getUpcomingBirthdays = async (companyId, userId, scope = 'company', days =
   return _getUpcomingBirthdays(companyId, today, to, 10, extraMatch);
 };
 
-module.exports = { getDashboardStats, getUpcomingBirthdays };
+// ─── Scoped "on leave today" (toggle: team | department) — for managers ──────────
+const getOnLeaveToday = async (companyId, userId, scope = 'team') => {
+  const today = startOfDay();
+
+  // Resolve the viewer's team/department to scope the list
+  const emp = await Employee.findOne({ company_id: companyId, user_id: userId })
+    .select('department_id team_id').lean();
+
+  const empFilter = { company_id: toObjectId(companyId), status: { $in: ['active', 'notice'] } };
+  if (emp) {
+    if (scope === 'department' && emp.department_id) empFilter.department_id = emp.department_id;
+    else if (emp.team_id) empFilter.team_id = emp.team_id; // default → team
+  }
+
+  const scoped = await Employee.find(empFilter).select('_id').lean();
+  const ids = scoped.map(e => e._id);
+  if (!ids.length) return [];
+
+  const leaves = await LeaveRequest.find({
+    company_id: companyId, status: 'approved',
+    employee_id: { $in: ids },
+    startDate: { $lte: today }, endDate: { $gte: today },
+  }).populate('employee_id', 'firstName lastName employeeId').select('employee_id isHalfDay').limit(50);
+
+  return leaves
+    .map(l => ({
+      _id:        l.employee_id?._id,
+      firstName:  l.employee_id?.firstName,
+      lastName:   l.employee_id?.lastName,
+      employeeId: l.employee_id?.employeeId,
+      isHalfDay:  l.isHalfDay || false,
+    }))
+    .filter(l => l._id);
+};
+
+module.exports = { getDashboardStats, getUpcomingBirthdays, getOnLeaveToday };

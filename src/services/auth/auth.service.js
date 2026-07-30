@@ -300,10 +300,35 @@ const resetPassword = async (token, email, newPassword) => {
   user.password = newPassword;
   user.passwordResetToken = null;
   user.passwordResetExpires = null;
+  user.mustChangePassword = false; // reset via link also clears the forced-change flag
   user.refreshTokens = []; // Invalidate all sessions
   await user.save();
 
   return { message: 'Password reset successfully. Please log in with your new password.' };
 };
 
-module.exports = { signup, login, logout, refreshAccessToken, getMe, forgotPassword, resetPassword };
+// ─── Change Password (authenticated) ────────────────────────────────────────────
+// Used both by the forced first-login flow (temp password) and normal in-app
+// password changes. currentPassword is optional: when the user is on the forced
+// flow they just logged in with the temp password, so we don't demand it again.
+const changePassword = async (userId, { currentPassword, newPassword }) => {
+  if (!newPassword) throw new AppError('New password is required.', 400);
+
+  const user = await User.findById(userId).select('+password +refreshTokens');
+  if (!user) throw new AppError('User not found.', 404);
+
+  // Only enforce the current-password check for normal changes, not the forced flow.
+  if (!user.mustChangePassword) {
+    if (!currentPassword) throw new AppError('Current password is required.', 400);
+    const isMatch = await user.comparePassword(currentPassword);
+    if (!isMatch) throw new AppError('Current password is incorrect.', 401);
+  }
+
+  user.password = newPassword;
+  user.mustChangePassword = false;
+  await user.save();
+
+  return { message: 'Password changed successfully.' };
+};
+
+module.exports = { signup, login, logout, refreshAccessToken, getMe, forgotPassword, resetPassword, changePassword };

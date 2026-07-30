@@ -1,5 +1,8 @@
-const Company  = require('../../models/Company');
-const AppError = require('../../utils/AppError');
+const Company            = require('../../models/Company');
+const TenantSubscription = require('../../models/TenantSubscription');
+const Employee           = require('../../models/Employee');
+const AppError           = require('../../utils/AppError');
+const { computeTenantStatus, daysUntilExpiry } = require('../admin/tenantStatus');
 const path     = require('path');
 const fs       = require('fs');
 
@@ -16,6 +19,42 @@ const getCompany = async (companyId) => {
   const company = await Company.findById(companyId).lean();
   if (!company) throw new AppError('Company not found.', 404);
   return company;
+};
+
+// ─── Get subscription / plan details (for the tenant's own admins) ─────────────
+const getSubscription = async (companyId) => {
+  const company = await Company.findById(companyId).select('isActive name').lean();
+  if (!company) throw new AppError('Company not found.', 404);
+
+  const sub = await TenantSubscription.findOne({ company_id: companyId })
+    .populate('plan_id')
+    .lean();
+
+  const activeEmployees = await Employee.countDocuments({ company_id: companyId, status: 'active' });
+  const plan = sub?.plan_id || null;
+
+  return {
+    status:             computeTenantStatus(company, sub),
+    subscriptionStatus: sub?.status ?? null,
+    startDate:          sub?.startDate ?? null,
+    expiryDate:         sub?.expiryDate ?? null,
+    daysUntilExpiry:    daysUntilExpiry(sub),
+    plan: plan
+      ? {
+          name:         plan.name,
+          description:  plan.description,
+          price:        plan.price,
+          currency:     plan.currency,
+          billingCycle: plan.billingCycle,
+          maxEmployees: plan.maxEmployees,
+          features:     plan.features || [],
+        }
+      : null,
+    usage: {
+      activeEmployees,
+      maxEmployees: plan?.maxEmployees ?? null, // null = unlimited
+    },
+  };
 };
 
 // ─── Update company settings ───────────────────────────────────────────────────
@@ -174,4 +213,4 @@ const removePayslipLogo = async (companyId) => {
   await Company.findByIdAndUpdate(companyId, { $set: { 'settings.payslip.logo': null } });
 };
 
-module.exports = { getCompany, updateCompany, uploadLogo, removeLogo, uploadSignature, removeSignature, uploadPayslipLogo, removePayslipLogo };
+module.exports = { getCompany, getSubscription, updateCompany, uploadLogo, removeLogo, uploadSignature, removeSignature, uploadPayslipLogo, removePayslipLogo };

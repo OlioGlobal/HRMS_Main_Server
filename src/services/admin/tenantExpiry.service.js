@@ -4,7 +4,9 @@ const Company               = require('../../models/Company');
 const PlanAssignmentHistory = require('../../models/PlanAssignmentHistory');
 const logger                = require('../../utils/logger');
 
-const jobId = (companyId) => `expiry:${companyId}`;
+// NOTE: BullMQ forbids ':' in custom job IDs (it's the internal Redis key
+// separator) — use '-' as the separator.
+const jobId = (companyId) => `expiry-${companyId}`;
 
 /** Remove any pending expiry job for this company (safe if none exists). */
 const cancelExpiry = async (companyId) => {

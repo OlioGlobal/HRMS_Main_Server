@@ -55,4 +55,18 @@ const getBirthdays = catchAsync(async (req, res) => {
   });
 });
 
-module.exports = { getStats, getBirthdays };
+// GET /api/dashboard/on-leave?scope=team|department
+const getOnLeave = catchAsync(async (req, res) => {
+  const { companyId, userId } = req.user;
+  const scope = req.query.scope === 'department' ? 'department' : 'team';
+
+  const onLeave = await dashboardService.getOnLeaveToday(companyId, userId, scope);
+
+  sendSuccess(res, {
+    status:  200,
+    message: 'On leave today fetched.',
+    data:    { onLeave },
+  });
+});
+
+module.exports = { getStats, getBirthdays, getOnLeave };

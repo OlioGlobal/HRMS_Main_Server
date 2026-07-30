@@ -7,6 +7,11 @@ const getCompany = catchAsync(async (req, res) => {
   sendSuccess(res, { data: { company } });
 });
 
+const getSubscription = catchAsync(async (req, res) => {
+  const subscription = await svc.getSubscription(req.user.companyId);
+  sendSuccess(res, { data: { subscription } });
+});
+
 const updateCompany = catchAsync(async (req, res) => {
   const company = await svc.updateCompany(req.user.companyId, req.body);
   sendSuccess(res, { message: 'Company settings updated.', data: { company } });
@@ -42,4 +47,4 @@ const removePayslipLogo = catchAsync(async (req, res) => {
   sendSuccess(res, { message: 'Payslip logo removed.' });
 });
 
-module.exports = { getCompany, updateCompany, uploadLogo, removeLogo, uploadSignature, removeSignature, uploadPayslipLogo, removePayslipLogo };
+module.exports = { getCompany, getSubscription, updateCompany, uploadLogo, removeLogo, uploadSignature, removeSignature, uploadPayslipLogo, removePayslipLogo };
