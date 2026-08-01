@@ -21,7 +21,7 @@ const getTransporter = () => {
   return transporter;
 };
 
-const sendEmail = async ({ to, subject, html, attachments }) => {
+const sendEmail = async ({ to, cc, bcc, subject, html, attachments }) => {
   const t = getTransporter();
   if (!t) return { success: false, error: 'Email not configured' };
 
@@ -29,6 +29,8 @@ const sendEmail = async ({ to, subject, html, attachments }) => {
     const info = await t.sendMail({
       from: process.env.EMAIL_FROM || process.env.EMAIL_USER,
       to,
+      ...(cc && cc.length ? { cc } : {}),
+      ...(bcc && bcc.length ? { bcc } : {}),
       subject,
       html,
       ...(attachments && attachments.length ? { attachments } : {}),

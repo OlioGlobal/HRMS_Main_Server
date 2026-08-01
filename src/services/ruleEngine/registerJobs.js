@@ -11,6 +11,7 @@ const Company = require('../../models/Company');
 const NotificationRule = require('../../models/NotificationRule');
 const autoAbsentJob = require('../../cron/jobs/autoAbsent.job');
 const documentExpiryJob = require('../../cron/jobs/documentExpiry.job');
+const { getLocalHour, buildLocationTZMap } = require('./handlers/helpers');
 
 /** All cron-based rule slugs */
 const CRON_SLUGS = [
@@ -25,6 +26,18 @@ const CRON_SLUGS = [
   'holiday-reminder',
   'leave-auto-approve',
 ];
+
+/**
+ * Employee-facing greeting rules whose send time must follow each recipient's
+ * OWN location timezone (not the company's). These run every hour with the daily
+ * dedup skipped; the handler includes only employees whose local hour == runTime,
+ * so each person is greeted once, at their local run time, even across locations.
+ */
+const PER_LOCATION_SLUGS = new Set([
+  'birthday-wishes',
+  'work-anniversary',
+  'holiday-reminder',
+]);
 
 /**
  * Process shift notifications (every 15 min) for all companies.
@@ -48,12 +61,21 @@ const processShiftNotifications = async () => {
 
 /**
  * Process all cron rules across all companies.
- * The dedup logic inside executeRule prevents running the same rule twice per day.
+ *
+ * The master job ticks hourly, but each rule has a configured runTime (e.g. "09:00").
+ *
+ *  • Per-location greeting rules (birthday, anniversary, holiday) run every hour with
+ *    the daily dedup skipped — the handler filters recipients to those whose OWN
+ *    location-local hour matches runTime, so each person is greeted once at their
+ *    local time regardless of which office/timezone they're in. We only bother running
+ *    when at least one relevant timezone is currently at the run hour.
+ *  • All other cron rules fire once per day, gated on the company-local run hour, with
+ *    the RuleExecution dedup as a second safety net against re-runs.
  */
 const processCronRules = async () => {
   let companies;
   try {
-    companies = await Company.find({}).select('_id').lean();
+    companies = await Company.find({}).select('_id settings.timezone').lean();
   } catch (err) {
     console.error('[RuleEngine] Failed to fetch companies for cron processing:', err.message);
     return;
@@ -63,9 +85,11 @@ const processCronRules = async () => {
 
   for (const company of companies) {
     const companyId = company._id.toString();
+    const companyTZ = company.settings?.timezone || 'UTC';
+    const companyLocalHour = getLocalHour(companyTZ);
 
     // Fetch enabled cron rules for this company in one query to avoid unnecessary work
-    let enabledSlugs;
+    let ruleConfigs; // slug -> { runHour, consolidate }
     try {
       const enabledRules = await NotificationRule.find({
         company_id: company._id,
@@ -73,21 +97,67 @@ const processCronRules = async () => {
         isEnabled: true,
         slug: { $in: CRON_SLUGS },
       })
-        .select('slug')
+        .select('slug config.runTime config.consolidateEmail')
         .lean();
 
-      enabledSlugs = new Set(enabledRules.map((r) => r.slug));
+      ruleConfigs = new Map(
+        enabledRules.map((r) => {
+          const rt = r.config?.runTime; // e.g. "09:00"
+          const hour = typeof rt === 'string' && rt.includes(':')
+            ? parseInt(rt.split(':')[0], 10)
+            : null;
+          return [r.slug, {
+            runHour: Number.isNaN(hour) ? null : hour,
+            consolidate: !!r.config?.consolidateEmail,
+          }];
+        })
+      );
     } catch (err) {
       console.error(`[RuleEngine] Failed to fetch rules for company ${companyId}:`, err.message);
       continue;
     }
 
+    // The distinct local hours currently in effect across the company's timezones
+    // (company default + every active location). Used to decide whether a per-location
+    // greeting rule has anyone due right now, so we skip pointless hourly runs.
+    let activeHours = new Set([companyLocalHour]);
+    const needsLocationHours = [...ruleConfigs.entries()].some(
+      ([s, c]) => PER_LOCATION_SLUGS.has(s) && !c.consolidate
+    );
+    if (needsLocationHours) {
+      try {
+        const locTZMap = await buildLocationTZMap(company._id, companyTZ);
+        for (const tz of locTZMap.values()) activeHours.add(getLocalHour(tz));
+      } catch (err) {
+        console.error(`[RuleEngine] Failed to resolve location timezones for company ${companyId}:`, err.message);
+      }
+    }
+
     for (const slug of CRON_SLUGS) {
       // Skip if not enabled (avoids unnecessary handler calls)
-      if (!enabledSlugs.has(slug)) continue;
+      if (!ruleConfigs.has(slug)) continue;
+
+      const { runHour, consolidate } = ruleConfigs.get(slug);
+      // Per-location mode requires a concrete run hour AND per-recipient emails. When the
+      // rule consolidates into one CC'd email, we can't stagger by local time — fall back
+      // to the once-per-day company-gated path below.
+      const perLocation = PER_LOCATION_SLUGS.has(slug) && runHour !== null && !consolidate;
+
+      let contextData = {};
+      if (perLocation) {
+        // Run only when SOME timezone is at the run hour; the handler filters recipients
+        // to those whose own location-local hour matches. Skip the daily dedup so it can
+        // fire once per timezone across the day.
+        if (!activeHours.has(runHour)) continue;
+        contextData = { _skipDedup: true, _runHour: runHour };
+      } else {
+        // Honor the configured run time in the company timezone; fire once per day.
+        // If no runTime is set, fall back to running every tick (dedup keeps it once/day).
+        if (runHour !== null && runHour !== companyLocalHour) continue;
+      }
 
       try {
-        const result = await executeRule(companyId, slug, {});
+        const result = await executeRule(companyId, slug, contextData);
         if (result.notificationsCreated > 0) {
           console.log(
             `[RuleEngine] Cron ${slug} for company ${companyId}: ` +

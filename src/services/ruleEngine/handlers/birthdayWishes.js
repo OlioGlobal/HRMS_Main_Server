@@ -1,7 +1,8 @@
 const Employee = require('../../../models/Employee');
 const User = require('../../../models/User');
 const Department = require('../../../models/Department');
-const { fullName } = require('./helpers');
+const Company = require('../../../models/Company');
+const { fullName, getLocalHour, buildLocationTZMap, resolveEmployeeTZ } = require('./helpers');
 
 const slug = 'birthday-wishes';
 
@@ -14,6 +15,18 @@ const findRecipients = async (companyId, contextData, config) => {
     const today = new Date();
     const month = today.getMonth() + 1; // 1-based
     const day = today.getDate();
+
+    // When invoked per-location (from the hourly runner), only greet recipients whose
+    // OWN location-local hour matches the configured run hour, so everyone is greeted
+    // at their local run time. runHour is undefined when there is no per-location gating.
+    const runHour = contextData?._runHour ?? null;
+    let companyTZ = 'UTC';
+    let locTZMap = new Map();
+    if (runHour !== null) {
+      const company = await Company.findById(companyId).select('settings.timezone').lean();
+      companyTZ = company?.settings?.timezone || 'UTC';
+      locTZMap = await buildLocationTZMap(companyId, companyTZ);
+    }
 
     const employees = await Employee.find({
       company_id: companyId,
@@ -38,7 +51,7 @@ const findRecipients = async (companyId, contextData, config) => {
       company_id: companyId,
       status: 'active',
       user_id: { $ne: null },
-    }).select('_id user_id firstName lastName').lean();
+    }).select('_id user_id firstName lastName location_id').lean();
 
     const recipients = [];
     const addedUserIds = new Set();
@@ -57,6 +70,13 @@ const findRecipients = async (companyId, contextData, config) => {
       // Notify ALL employees about this birthday
       for (const other of allEmployees) {
         if (!other.user_id) continue;
+
+        // Per-location gating: only include recipients whose own local hour is the run hour.
+        if (runHour !== null) {
+          const recipientTZ = resolveEmployeeTZ(other, locTZMap, companyTZ);
+          if (getLocalHour(recipientTZ) !== runHour) continue;
+        }
+
         const uid = other.user_id.toString();
         // Prevent duplicate if same person has birthday and is also in allEmployees
         const dedupKey = `${uid}-${emp._id}`;
@@ -67,6 +87,10 @@ const findRecipients = async (companyId, contextData, config) => {
         recipients.push({
           userId: uid,
           recipientType: isBirthdayPerson ? 'employee' : 'manager',
+          // For consolidated email: group everyone under this birthday person, who is the
+          // primary (goes in To); all colleagues are CC'd.
+          consolidateKey: emp._id.toString(),
+          isPrimary: isBirthdayPerson,
           variables: {
             ...variables,
             recipientName: `${other.firstName} ${other.lastName}`,

@@ -1,32 +1,20 @@
 const NotificationRule = require('../models/NotificationRule');
+const { buildEmail } = require('../utils/emailTemplates');
 
-// ── HTML email wrapper ─────────────────────────────────────────────────────────
-const wrapEmail = (bodyContent) => `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <style>
-    body { margin: 0; padding: 0; background: #f4f5f7; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
-    .container { max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 8px; overflow: hidden; margin-top: 24px; margin-bottom: 24px; }
-    .header { background: #18181b; padding: 24px; text-align: center; }
-    .header h1 { color: #ffffff; margin: 0; font-size: 20px; font-weight: 600; }
-    .body { padding: 32px 24px; color: #27272a; line-height: 1.6; }
-    .body h2 { margin: 0 0 16px 0; font-size: 18px; color: #18181b; }
-    .body p { margin: 0 0 12px 0; font-size: 14px; }
-    .highlight { background: #f4f4f5; border-left: 4px solid #18181b; padding: 12px 16px; margin: 16px 0; border-radius: 0 4px 4px 0; }
-    .footer { padding: 16px 24px; text-align: center; font-size: 12px; color: #a1a1aa; border-top: 1px solid #e4e4e7; }
-  </style>
-</head>
-<body>
-  <div class="container">
-    <div class="header"><h1>{{companyName}}</h1></div>
-    <div class="body">${bodyContent}</div>
-    <div class="footer">This is an automated notification. Please do not reply to this email.</div>
-  </div>
-</body>
-</html>`.trim();
+// ── Shared CTA blocks (Handlebars conditionals compiled at send time) ──────────
+const approveRejectBlock =
+  '{{#if approveUrl}}' +
+  '<div class="btns">' +
+  '<a class="btn" href="{{approveUrl}}" style="background:#16a34a;color:#ffffff;">Approve</a>' +
+  '<a class="btn" href="{{rejectUrl}}" style="background:#dc2626;color:#ffffff;">Reject</a>' +
+  '</div>' +
+  '<p class="note" style="text-align:center;">These action links expire in 72 hours.</p>' +
+  '{{/if}}';
+
+const receiptBlock =
+  '{{#if hasReceipt}}' +
+  '<div class="btns"><a class="btn" href="{{viewReceiptUrl}}" style="background:#3f3f46;color:#ffffff;">View Receipt</a></div>' +
+  '{{/if}}';
 
 // ── Default notification rules ─────────────────────────────────────────────────
 const DEFAULT_RULES = [
@@ -48,14 +36,14 @@ const DEFAULT_RULES = [
         body: '{{employeeName}}\'s probation ends on {{probationEndDate}}.',
       },
       email: {
-        subject: 'Probation Ending Soon - {{employeeName}}',
-        body: wrapEmail(
-          '<h2>Probation Reminder</h2>' +
-          '<p>This is to inform you that <strong>{{employeeName}}</strong>\'s probation period is ending soon.</p>' +
-          '<div class="highlight"><p><strong>Employee:</strong> {{employeeName}}<br/>' +
-          '<strong>Probation End Date:</strong> {{probationEndDate}}</p></div>' +
-          '<p>Please take the necessary steps to review their performance and confirm their status before the end date.</p>'
-        ),
+        subject: 'Probation ending soon — {{employeeName}}',
+        body: buildEmail({
+          accent: '#f59e0b', icon: '⏳', iconBg: '#fef3c7',
+          title: 'Probation Ending Soon',
+          greeting: 'Hi {{recipientName}},',
+          intro: '<strong>{{employeeName}}</strong>\'s probation period is ending soon. Please review their performance and confirm their status before the end date.',
+          rows: [['Employee', '{{employeeName}}'], ['Probation Ends', '{{probationEndDate}}']],
+        }),
       },
     },
   },
@@ -69,21 +57,23 @@ const DEFAULT_RULES = [
     cronSchedule: '0 9 * * *',
     isEnabled: false,
     isSystem: true,
-    config: { daysBefore: null, daysAfter: null, runTime: '09:00' },
+    config: { daysBefore: null, daysAfter: null, runTime: '09:00', consolidateEmail: true },
     recipients: { employee: true, manager: true, hr: false },
     channels: { inApp: true, email: false },
     templates: {
       inApp: {
-        title: 'Happy Birthday! \uD83C\uDF89',
-        body: 'Happy Birthday {{employeeName}}! \uD83C\uDF89 Wishing you a wonderful day!',
+        title: 'Happy Birthday! 🎉',
+        body: 'Happy Birthday {{employeeName}}! 🎉 Wishing you a wonderful day!',
       },
       email: {
-        subject: 'Happy Birthday {{employeeName}}!',
-        body: wrapEmail(
-          '<h2>Happy Birthday! \uD83C\uDF89</h2>' +
-          '<p>Happy Birthday <strong>{{employeeName}}</strong>!</p>' +
-          '<p>Wishing you a wonderful day filled with joy and happiness.</p>'
-        ),
+        subject: 'Happy Birthday, {{employeeName}}! 🎉',
+        body: buildEmail({
+          accent: '#ec4899', icon: '🎂', iconBg: '#fce7f3',
+          title: 'Happy Birthday, {{employeeName}}! 🎉',
+          intro: 'Today we\'re celebrating <strong>{{employeeName}}</strong>. Join us in wishing them a wonderful day filled with joy, laughter, and success! 🎂',
+          rows: [['Employee', '{{employeeName}}'], ['Team', '{{department}}']],
+          note: 'Sent with warm wishes from everyone at {{companyName}}.',
+        }),
       },
     },
   },
@@ -106,24 +96,22 @@ const DEFAULT_RULES = [
         body: '{{employeeName}} applied for {{leaveType}} ({{startDate}} - {{endDate}}, {{duration}}). Status: {{status}}.',
       },
       email: {
-        subject: 'Leave {{status}} - {{employeeName}} ({{duration}})',
-        body: wrapEmail(
-          '<h2>Leave {{status}}</h2>' +
-          '<p>{{employeeName}} has a leave update.</p>' +
-          '<div class="highlight"><p><strong>Employee:</strong> {{employeeName}}<br/>' +
-          '<strong>Leave Type:</strong> {{leaveType}}<br/>' +
-          '<strong>Period:</strong> {{startDate}} - {{endDate}}<br/>' +
-          '<strong>Duration:</strong> {{duration}}<br/>' +
-          '<strong>Reason:</strong> {{reason}}<br/>' +
-          '<strong>Status:</strong> {{status}}</p></div>' +
-          '{{#if approveUrl}}' +
-          '<div style="margin-top:24px;text-align:center">' +
-          '<a href="{{approveUrl}}" style="display:inline-block;padding:12px 32px;background:#16a34a;color:#fff;text-decoration:none;border-radius:8px;font-weight:600;margin-right:12px">✅ Approve</a>' +
-          '<a href="{{rejectUrl}}" style="display:inline-block;padding:12px 32px;background:#dc2626;color:#fff;text-decoration:none;border-radius:8px;font-weight:600">❌ Reject</a>' +
-          '</div>' +
-          '<p style="margin-top:12px;font-size:12px;color:#a1a1aa;text-align:center">These links expire in 72 hours.</p>' +
-          '{{/if}}'
-        ),
+        subject: 'Leave {{status}} — {{employeeName}} ({{duration}})',
+        body: buildEmail({
+          accent: '#6366f1', icon: '🌴', iconBg: '#eef2ff',
+          title: 'Leave {{status}}',
+          greeting: 'Hi {{recipientName}},',
+          intro: 'There\'s an update on <strong>{{employeeName}}</strong>\'s leave request.',
+          rows: [
+            ['Employee', '{{employeeName}}'],
+            ['Leave Type', '{{leaveType}}'],
+            ['Period', '{{startDate}} &rarr; {{endDate}}'],
+            ['Duration', '{{duration}}'],
+            ['Reason', '{{reason}}'],
+            ['Status', '{{status}}'],
+          ],
+          extraHtml: approveRejectBlock,
+        }),
       },
     },
   },
@@ -146,12 +134,13 @@ const DEFAULT_RULES = [
         body: 'You forgot to clock out today. Please submit a regularization request.',
       },
       email: {
-        subject: 'Missed Clock-Out Reminder',
-        body: wrapEmail(
-          '<h2>Missed Clock-Out</h2>' +
-          '<p>It looks like you forgot to clock out today.</p>' +
-          '<p>Please submit a regularization request to correct your attendance record.</p>'
-        ),
+        subject: 'You missed a clock-out today',
+        body: buildEmail({
+          accent: '#ef4444', icon: '⏰', iconBg: '#fee2e2',
+          title: 'You Missed a Clock-Out',
+          intro: 'It looks like you forgot to clock out today. Please submit a regularization request so your attendance record stays accurate.',
+          note: 'You can raise a regularization from Attendance &rarr; My Attendance in the portal.',
+        }),
       },
     },
   },
@@ -174,15 +163,18 @@ const DEFAULT_RULES = [
         body: '{{documentName}} for {{employeeName}} expires on {{expiryDate}}.',
       },
       email: {
-        subject: 'Document Expiry Alert - {{documentName}}',
-        body: wrapEmail(
-          '<h2>Document Expiry Alert</h2>' +
-          '<p>The following document is expiring soon and needs attention.</p>' +
-          '<div class="highlight"><p><strong>Document:</strong> {{documentName}}<br/>' +
-          '<strong>Employee:</strong> {{employeeName}}<br/>' +
-          '<strong>Expiry Date:</strong> {{expiryDate}}</p></div>' +
-          '<p>Please ensure the document is renewed or updated before the expiry date.</p>'
-        ),
+        subject: 'Document expiring soon — {{documentName}}',
+        body: buildEmail({
+          accent: '#f59e0b', icon: '📄', iconBg: '#fef3c7',
+          title: 'Document Expiring Soon',
+          greeting: 'Hi {{recipientName}},',
+          intro: 'A document is approaching its expiry date and needs attention before it lapses.',
+          rows: [
+            ['Document', '{{documentName}}'],
+            ['Employee', '{{employeeName}}'],
+            ['Expiry Date', '{{expiryDate}}'],
+          ],
+        }),
       },
     },
   },
@@ -205,12 +197,13 @@ const DEFAULT_RULES = [
         body: 'Your payslip for {{month}} {{year}} is ready. You can view and download it from your payroll section.',
       },
       email: {
-        subject: 'Your Payslip for {{month}} {{year}} is Ready',
-        body: wrapEmail(
-          '<h2>Payslip Ready</h2>' +
-          '<p>Your payslip for <strong>{{month}} {{year}}</strong> is now available.</p>' +
-          '<p>You can view and download it from your payroll section in the portal.</p>'
-        ),
+        subject: 'Your payslip for {{month}} {{year}} is ready',
+        body: buildEmail({
+          accent: '#16a34a', icon: '💰', iconBg: '#dcfce7',
+          title: 'Your Payslip is Ready',
+          intro: 'Your payslip for <strong>{{month}} {{year}}</strong> is now available. You can view and download it anytime from your payroll section.',
+          rows: [['Pay Period', '{{month}} {{year}}']],
+        }),
       },
     },
   },
@@ -233,12 +226,14 @@ const DEFAULT_RULES = [
         body: 'Appraisal deadline in {{daysLeft}} days for {{cycleName}}. Please complete your review.',
       },
       email: {
-        subject: 'Appraisal Deadline in {{daysLeft}} Days - {{cycleName}}',
-        body: wrapEmail(
-          '<h2>Appraisal Deadline Approaching</h2>' +
-          '<p>The appraisal deadline for <strong>{{cycleName}}</strong> is in <strong>{{daysLeft}} days</strong>.</p>' +
-          '<p>Please ensure you have completed your review before the deadline.</p>'
-        ),
+        subject: 'Appraisal deadline in {{daysLeft}} days — {{cycleName}}',
+        body: buildEmail({
+          accent: '#6366f1', icon: '📊', iconBg: '#eef2ff',
+          title: 'Appraisal Deadline Approaching',
+          greeting: 'Hi {{recipientName}},',
+          intro: 'The appraisal window for <strong>{{cycleName}}</strong> closes in <strong>{{daysLeft}} day(s)</strong>. Please complete your review in time.',
+          rows: [['Cycle', '{{cycleName}}'], ['Days Left', '{{daysLeft}}']],
+        }),
       },
     },
   },
@@ -261,14 +256,14 @@ const DEFAULT_RULES = [
         body: '{{employeeName}}\'s onboarding is incomplete ({{progress}}%). Please complete the remaining steps.',
       },
       email: {
-        subject: 'Onboarding Incomplete - {{employeeName}}',
-        body: wrapEmail(
-          '<h2>Onboarding Incomplete</h2>' +
-          '<p><strong>{{employeeName}}</strong>\'s onboarding process is still incomplete after joining.</p>' +
-          '<div class="highlight"><p><strong>Employee:</strong> {{employeeName}}<br/>' +
-          '<strong>Progress:</strong> {{progress}}%</p></div>' +
-          '<p>Please follow up and ensure all onboarding steps are completed as soon as possible.</p>'
-        ),
+        subject: 'Onboarding incomplete — {{employeeName}}',
+        body: buildEmail({
+          accent: '#0ea5e9', icon: '🚀', iconBg: '#e0f2fe',
+          title: 'Onboarding Still Incomplete',
+          greeting: 'Hi {{recipientName}},',
+          intro: '<strong>{{employeeName}}</strong>\'s onboarding is only {{progress}}% complete. Please help wrap up the remaining steps as soon as possible.',
+          rows: [['Employee', '{{employeeName}}'], ['Progress', '{{progress}}%']],
+        }),
       },
     },
   },
@@ -291,15 +286,19 @@ const DEFAULT_RULES = [
         body: '{{employeeName}}\'s last working day is {{lastWorkingDay}} ({{daysLeft}} days left).',
       },
       email: {
-        subject: 'Offboarding - {{employeeName}}\'s Last Working Day Approaching',
-        body: wrapEmail(
-          '<h2>Offboarding Approaching</h2>' +
-          '<p><strong>{{employeeName}}</strong>\'s last working day is approaching.</p>' +
-          '<div class="highlight"><p><strong>Employee:</strong> {{employeeName}}<br/>' +
-          '<strong>Last Working Day:</strong> {{lastWorkingDay}}<br/>' +
-          '<strong>Days Left:</strong> {{daysLeft}}</p></div>' +
-          '<p>Please ensure all offboarding tasks (knowledge transfer, asset return, exit interview, access revocation) are completed before the last working day.</p>'
-        ),
+        subject: 'Offboarding — {{employeeName}}\'s last working day approaching',
+        body: buildEmail({
+          accent: '#f59e0b', icon: '👋', iconBg: '#fef3c7',
+          title: 'Last Working Day Approaching',
+          greeting: 'Hi {{recipientName}},',
+          intro: '<strong>{{employeeName}}</strong>\'s last working day is coming up. Please ensure all offboarding tasks are completed in time.',
+          rows: [
+            ['Employee', '{{employeeName}}'],
+            ['Last Working Day', '{{lastWorkingDay}}'],
+            ['Days Left', '{{daysLeft}}'],
+          ],
+          note: 'Checklist: knowledge transfer, asset return, exit interview, and access revocation.',
+        }),
       },
     },
   },
@@ -313,21 +312,23 @@ const DEFAULT_RULES = [
     cronSchedule: '0 9 * * *',
     isEnabled: false,
     isSystem: true,
-    config: { daysBefore: null, daysAfter: null, runTime: '09:00' },
+    config: { daysBefore: null, daysAfter: null, runTime: '09:00', consolidateEmail: true },
     recipients: { employee: true, manager: true, hr: false },
     channels: { inApp: true, email: false },
     templates: {
       inApp: {
-        title: 'Happy Work Anniversary! \uD83C\uDF89',
+        title: 'Happy Work Anniversary! 🎉',
         body: 'Happy {{years}} year work anniversary {{employeeName}}! Thank you for your dedication and contributions.',
       },
       email: {
-        subject: 'Happy {{years}} Year Work Anniversary {{employeeName}}!',
-        body: wrapEmail(
-          '<h2>Happy Work Anniversary! \uD83C\uDF89</h2>' +
-          '<p>Congratulations <strong>{{employeeName}}</strong> on completing <strong>{{years}} year(s)</strong> with us!</p>' +
-          '<p>Thank you for your dedication, hard work, and contributions to the team. Here\'s to many more years together!</p>'
-        ),
+        subject: 'Happy {{years}}-year work anniversary, {{employeeName}}! 🎉',
+        body: buildEmail({
+          accent: '#8b5cf6', icon: '🎉', iconBg: '#ede9fe',
+          title: 'Happy Work Anniversary, {{employeeName}}!',
+          intro: 'Congratulations to <strong>{{employeeName}}</strong> on completing <strong>{{years}} year(s)</strong> with us! Thank you for the dedication, energy, and impact. Here\'s to many more! 🥳',
+          rows: [['Employee', '{{employeeName}}'], ['Years', '{{years}}'], ['Joined', '{{joiningDate}}']],
+          note: 'Celebrated by everyone at {{companyName}}.',
+        }),
       },
     },
   },
@@ -341,7 +342,7 @@ const DEFAULT_RULES = [
     cronSchedule: '0 9 * * *',
     isEnabled: true,
     isSystem: true,
-    config: { daysBefore: 2, daysAfter: null, runTime: '09:00' },
+    config: { daysBefore: 2, daysAfter: null, runTime: '09:00', consolidateEmail: true },
     recipients: { employee: true, manager: false, hr: false },
     channels: { inApp: true, email: false },
     templates: {
@@ -350,13 +351,18 @@ const DEFAULT_RULES = [
         body: '{{holidayName}} is on {{holidayDate}} ({{daysLeft}} day(s) from now). {{locationNote}}',
       },
       email: {
-        subject: 'Upcoming Holiday: {{holidayName}} on {{holidayDate}}',
-        body: wrapEmail(
-          '<h2>Upcoming Holiday</h2>' +
-          '<p><strong>{{holidayName}}</strong> is on <strong>{{holidayDate}}</strong>.</p>' +
-          '<p>{{locationNote}}</p>' +
-          '<p>Enjoy your day off!</p>'
-        ),
+        subject: 'Upcoming holiday: {{holidayName}} on {{holidayDate}}',
+        body: buildEmail({
+          accent: '#0ea5e9', icon: '🏖️', iconBg: '#e0f2fe',
+          title: 'Upcoming Holiday',
+          intro: 'A quick heads-up — <strong>{{holidayName}}</strong> is coming up in {{daysLeft}} day(s). {{locationNote}}',
+          rows: [
+            ['Holiday', '{{holidayName}}'],
+            ['Date', '{{holidayDate}}'],
+            ['Applies To', '{{locationName}}'],
+          ],
+          note: 'Enjoy your day off! 🌴',
+        }),
       },
     },
   },
@@ -379,14 +385,17 @@ const DEFAULT_RULES = [
         body: 'Your {{leaveType}} ({{startDate}} - {{endDate}}, {{duration}}) has been auto-approved after {{autoApproveDays}} day(s).',
       },
       email: {
-        subject: 'Leave Auto-Approved - {{leaveType}} ({{duration}})',
-        body: wrapEmail(
-          '<h2>Leave Auto-Approved</h2>' +
-          '<p>Your <strong>{{leaveType}}</strong> request has been automatically approved.</p>' +
-          '<div class="highlight"><p><strong>Period:</strong> {{startDate}} - {{endDate}}<br/>' +
-          '<strong>Duration:</strong> {{duration}}<br/>' +
-          '<strong>Reason:</strong> No action taken within {{autoApproveDays}} day(s).</p></div>'
-        ),
+        subject: 'Leave auto-approved — {{leaveType}} ({{duration}})',
+        body: buildEmail({
+          accent: '#16a34a', icon: '✅', iconBg: '#dcfce7',
+          title: 'Leave Auto-Approved',
+          intro: 'Your <strong>{{leaveType}}</strong> request was automatically approved after {{autoApproveDays}} day(s) without action.',
+          rows: [
+            ['Leave Type', '{{leaveType}}'],
+            ['Period', '{{startDate}} &rarr; {{endDate}}'],
+            ['Duration', '{{duration}}'],
+          ],
+        }),
       },
     },
   },
@@ -409,12 +418,14 @@ const DEFAULT_RULES = [
         body: '{{shiftMessage}}',
       },
       email: {
-        subject: '{{shiftTitle}} - {{employeeName}}',
-        body: wrapEmail(
-          '<h2>{{shiftTitle}}</h2>' +
-          '<p>Hi <strong>{{employeeName}}</strong>,</p>' +
-          '<p>{{shiftMessage}}</p>'
-        ),
+        subject: '{{shiftTitle}} — {{employeeName}}',
+        body: buildEmail({
+          accent: '#6366f1', icon: '⏱️', iconBg: '#eef2ff',
+          title: '{{shiftTitle}}',
+          greeting: 'Hi {{employeeName}},',
+          intro: '{{shiftMessage}}',
+          rows: [['Shift', '{{shiftStart}} &ndash; {{shiftEnd}}'], ['Required Hours', '{{requiredHours}}h']],
+        }),
       },
     },
   },
@@ -437,25 +448,25 @@ const DEFAULT_RULES = [
         body: '{{employeeName}} requested WFH for {{date}}. Status: {{status}}.',
       },
       email: {
-        subject: 'WFH Request {{status}} - {{employeeName}}',
-        body: wrapEmail(
-          '<h2>WFH Request {{status}}</h2>' +
-          '<p>{{employeeName}} has a WFH request update.</p>' +
-          '<div class="highlight"><p><strong>Employee:</strong> {{employeeName}}<br/>' +
-          '<strong>Date:</strong> {{date}}<br/>' +
-          '<strong>Reason:</strong> {{reason}}<br/>' +
-          '<strong>Status:</strong> {{status}}</p></div>' +
-          '{{#if approveUrl}}' +
-          '<div style="margin-top:24px;text-align:center">' +
-          '<a href="{{approveUrl}}" style="display:inline-block;padding:12px 32px;background:#16a34a;color:#fff;text-decoration:none;border-radius:8px;font-weight:600;margin-right:12px">Approve</a>' +
-          '<a href="{{rejectUrl}}" style="display:inline-block;padding:12px 32px;background:#dc2626;color:#fff;text-decoration:none;border-radius:8px;font-weight:600">Reject</a>' +
-          '</div>' +
-          '<p style="margin-top:12px;font-size:12px;color:#a1a1aa;text-align:center">These links expire in 72 hours.</p>' +
-          '{{/if}}'
-        ),
+        subject: 'WFH request {{status}} — {{employeeName}}',
+        body: buildEmail({
+          accent: '#6366f1', icon: '🏠', iconBg: '#eef2ff',
+          title: 'WFH Request {{status}}',
+          greeting: 'Hi {{recipientName}},',
+          intro: 'There\'s an update on <strong>{{employeeName}}</strong>\'s work-from-home request.',
+          rows: [
+            ['Employee', '{{employeeName}}'],
+            ['Date', '{{date}}'],
+            ['Reason', '{{reason}}'],
+            ['Status', '{{status}}'],
+          ],
+          extraHtml: approveRejectBlock,
+        }),
       },
     },
   },
+
+  // 15. Reimbursement Notification
   {
     slug: 'reimbursement-notification',
     name: 'Reimbursement Notification',
@@ -474,28 +485,20 @@ const DEFAULT_RULES = [
       },
       email: {
         subject: 'Reimbursement {{status}} — {{employeeName}}',
-        body: wrapEmail(
-          '<h2>Reimbursement {{status}}</h2>' +
-          '<p>Hi <strong>{{recipientName}}</strong>,</p>' +
-          '<p>A reimbursement claim has been updated.</p>' +
-          '<div class="highlight"><p><strong>Employee:</strong> {{employeeName}}<br/>' +
-          '<strong>Category:</strong> {{category}}<br/>' +
-          '<strong>Amount:</strong> ₹{{amount}}<br/>' +
-          '<strong>Description:</strong> {{description}}<br/>' +
-          '<strong>Status:</strong> {{status}}</p></div>' +
-          '{{#if hasReceipt}}' +
-          '<div style="margin-top:16px;text-align:center">' +
-          '<a href="{{viewReceiptUrl}}" style="display:inline-block;padding:10px 24px;background:#3b82f6;color:#fff;text-decoration:none;border-radius:8px;font-weight:600;font-size:13px">View Receipt</a>' +
-          '</div>' +
-          '{{/if}}' +
-          '{{#if approveUrl}}' +
-          '<div style="margin-top:16px;text-align:center">' +
-          '<a href="{{approveUrl}}" style="display:inline-block;padding:12px 32px;background:#16a34a;color:#fff;text-decoration:none;border-radius:8px;font-weight:600;margin-right:12px">Approve</a>' +
-          '<a href="{{rejectUrl}}" style="display:inline-block;padding:12px 32px;background:#dc2626;color:#fff;text-decoration:none;border-radius:8px;font-weight:600">Reject</a>' +
-          '</div>' +
-          '<p style="margin-top:12px;font-size:12px;color:#a1a1aa;text-align:center">These links expire in 72 hours.</p>' +
-          '{{/if}}'
-        ),
+        body: buildEmail({
+          accent: '#16a34a', icon: '🧾', iconBg: '#dcfce7',
+          title: 'Reimbursement {{status}}',
+          greeting: 'Hi {{recipientName}},',
+          intro: 'A reimbursement claim has been updated.',
+          rows: [
+            ['Employee', '{{employeeName}}'],
+            ['Category', '{{category}}'],
+            ['Amount', '₹{{amount}}'],
+            ['Description', '{{description}}'],
+            ['Status', '{{status}}'],
+          ],
+          extraHtml: receiptBlock + approveRejectBlock,
+        }),
       },
     },
   },

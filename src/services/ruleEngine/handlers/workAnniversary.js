@@ -1,7 +1,8 @@
 const Employee = require('../../../models/Employee');
 const User = require('../../../models/User');
 const Department = require('../../../models/Department');
-const { fullName } = require('./helpers');
+const Company = require('../../../models/Company');
+const { fullName, getLocalHour, buildLocationTZMap, resolveEmployeeTZ } = require('./helpers');
 const { format } = require('date-fns');
 
 const slug = 'work-anniversary';
@@ -36,6 +37,17 @@ const findRecipients = async (companyId, contextData, config) => {
 
     if (!employees.length) return [];
 
+    // Per-location gating: only celebrate at the subject's own location-local run hour,
+    // so the employee (and their manager) are notified at that office's run time.
+    const runHour = contextData?._runHour ?? null;
+    let companyTZ = 'UTC';
+    let locTZMap = new Map();
+    if (runHour !== null) {
+      const company = await Company.findById(companyId).select('settings.timezone').lean();
+      companyTZ = company?.settings?.timezone || 'UTC';
+      locTZMap = await buildLocationTZMap(companyId, companyTZ);
+    }
+
     const recipients = [];
 
     for (const emp of employees) {
@@ -44,6 +56,11 @@ const findRecipients = async (companyId, contextData, config) => {
       const years = currentYear - joiningDate.getUTCFullYear();
 
       if (years < 1) continue;
+
+      // Skip employees whose location-local hour isn't the run hour yet (per-location mode).
+      if (runHour !== null && getLocalHour(resolveEmployeeTZ(emp, locTZMap, companyTZ)) !== runHour) {
+        continue;
+      }
 
       const variables = {
         employeeName,

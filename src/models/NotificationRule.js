@@ -48,6 +48,10 @@ const notificationRuleSchema = new Schema(
       repeatIntervalDays: { type: Number, default: null },
       maxNotifications: { type: Number, default: null },
       reminderMinutes: { type: Number, default: null },
+      // When true, send ONE email (To = the subject/first recipient, everyone else in CC)
+      // instead of a separate email per recipient. Used for announcements like birthdays
+      // and holidays. Disables per-location send timing for that rule.
+      consolidateEmail: { type: Boolean, default: false },
     },
     recipients: {
       employee: { type: Boolean, default: false },

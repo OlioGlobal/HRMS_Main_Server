@@ -152,13 +152,16 @@ const executeRule = async (companyId, ruleSlug, contextData = {}) => {
     return { ...stats, skipped: true, reason: 'disabled' };
   }
 
-  // 3. Dedup for cron rules: check if already ran successfully today (skip for frequent rules like shift-notification)
+  // 3. Dedup for cron rules: check if already ran today (skip for frequent rules like shift-notification).
+  //    A 'partial' run (some emails failed, e.g. Gmail rate limit) still means the rule already
+  //    dispatched today — treat it like 'success' so we don't re-blast every recipient next hour.
+  //    Only a fully 'failed' run (exception before any send) is allowed to retry.
   if (rule.triggerType === 'cron' && !contextData?._skipDedup) {
     const todayStart = startOfDayUTC();
     const existingExecution = await RuleExecution.findOne({
       company_id: companyId,
       ruleSlug,
-      status: 'success',
+      status: { $in: ['success', 'partial'] },
       triggeredAt: { $gte: todayStart },
     }).lean();
 
@@ -207,6 +210,11 @@ const executeRule = async (companyId, ruleSlug, contextData = {}) => {
   // 7. Build notifications + emails
   const notifications = [];
   const emailTasks = [];
+
+  // Consolidated email: one message with the subject/first recipient in To and everyone
+  // else in CC, instead of a separate email per recipient (announcements like birthdays).
+  const consolidate = rule.channels.email && !!rule.config.consolidateEmail;
+  const consolidateMap = new Map(); // key -> { to, cc:Set<email>, vars }
 
   for (const group of recipientGroups) {
     const templateVars = group.templateVars || group.variables || {};
@@ -281,16 +289,54 @@ const executeRule = async (companyId, ruleSlug, contextData = {}) => {
       if (rule.channels.email) {
         const email = target.email || userEmailMap.get(uid);
         if (email) {
-          const subject = compile(rule.templates?.email?.subject || '', templateVars);
-          const html = compile(rule.templates?.email?.body || '', templateVars);
-          emailTasks.push({ to: email, subject, html });
+          if (consolidate) {
+            // Group all recipients that belong to the same subject/event into one email.
+            const key = group.consolidateKey || group.employeeId?.toString() || '_all';
+            let entry = consolidateMap.get(key);
+            if (!entry) {
+              entry = { to: null, cc: new Set(), vars: templateVars };
+              consolidateMap.set(key, entry);
+            }
+            // The flagged primary (e.g. birthday person) goes in To; everyone else in CC.
+            if (group.isPrimary && !entry.to) {
+              entry.to = email;
+              entry.vars = templateVars;
+            } else {
+              entry.cc.add(email);
+            }
+          } else {
+            const subject = compile(rule.templates?.email?.subject || '', templateVars);
+            const html = compile(rule.templates?.email?.body || '', templateVars);
+            emailTasks.push({ to: email, subject, html });
+          }
         }
       }
     }
   }
 
-  // 8b. Send CC emails (extra recipients configured by admin)
-  if (rule.channels.email && rule.recipients.ccEmails?.length > 0 && recipientGroups.length > 0) {
+  // 8a. Materialize consolidated emails: one per subject/event, To + CC list.
+  if (consolidate && consolidateMap.size > 0) {
+    const adminCC = (rule.recipients.ccEmails || [])
+      .filter((e) => e && e.includes('@'))
+      .map((e) => e.trim());
+
+    for (const entry of consolidateMap.values()) {
+      let cc = [...entry.cc];
+      let to = entry.to;
+      if (!to) to = cc.shift(); // no flagged primary → promote the first recipient to To
+      if (!to) continue;
+      cc = cc.filter((e) => e !== to); // never CC the To address
+      for (const e of adminCC) if (e !== to && !cc.includes(e)) cc.push(e);
+
+      const subject = compile(rule.templates?.email?.subject || '', entry.vars);
+      const html = compile(rule.templates?.email?.body || '', entry.vars);
+      emailTasks.push({ to, cc: cc.length ? cc : undefined, subject, html });
+    }
+  }
+
+  // 8b. Send CC emails (extra recipients configured by admin).
+  // Skipped when consolidating — admin CC addresses are folded into the consolidated email above.
+  if (!consolidate && rule.channels.email && rule.recipients.ccEmails?.length > 0 && recipientGroups.length > 0) {
     // Use variables from first group but strip action URLs (CC shouldn't approve/reject)
     const firstVars = { ...(recipientGroups[0].templateVars || recipientGroups[0].variables || {}) };
     delete firstVars.approveUrl;
