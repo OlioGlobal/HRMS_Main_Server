@@ -44,7 +44,7 @@ const sharedRules = [
 
   body('halfDayThresholdHours')
     .optional()
-    .isFloat({ min: 1, max: 6 }).withMessage('Half day threshold must be 1–6 hours.'),
+    .isFloat({ min: 1, max: 12 }).withMessage('Half day threshold must be 1–12 hours.'),
 
   body('absentThresholdHours')
     .optional()
@@ -53,6 +53,23 @@ const sharedRules = [
   body('overtimeThresholdHours')
     .optional()
     .isFloat({ min: 4, max: 16 }).withMessage('Overtime threshold must be 4–16 hours.'),
+
+  // Clock-in cutoff that forces a half day (e.g. "11:00"). Empty/null disables it.
+  body('halfDayIfClockInAfter')
+    .optional({ nullable: true, checkFalsy: true })
+    .matches(TIME_REGEX).withMessage('Half-day cutoff must be in HH:mm format.'),
+
+  body('ignoreHalfDayIfFullHours')
+    .optional()
+    .isBoolean().withMessage('ignoreHalfDayIfFullHours must be true or false.'),
+
+  body('flexiLateInsPerMonth')
+    .optional()
+    .isInt({ min: 0, max: 31 }).withMessage('Flexi late-ins per month must be 0–31.'),
+
+  body('earlyExitsPerMonth')
+    .optional()
+    .isInt({ min: 0, max: 31 }).withMessage('Early exits per month must be 0–31.'),
 
   body('isDefault')
     .optional()

@@ -11,6 +11,8 @@
  * @param {number} policy.halfDayThresholdHours
  * @param {number} policy.absentThresholdHours
  * @param {number} policy.overtimeThresholdHours
+ * @param {string} [policy.halfDayIfClockInAfter]  — "HH:mm" local; clock-in after this forces half_day
+ * @param {boolean}[policy.ignoreHalfDayIfFullHours]— waive the above if full hours (>= halfDayThreshold) worked
  * @param {Date}   dateRef       — the attendance date (UTC midnight)
  * @param {string} timezone      — employee's timezone (e.g. 'Asia/Kolkata')
  * @returns {Object} { status, isLate, lateByMinutes, totalHours, overtimeHours }
@@ -45,9 +47,24 @@ const calculateAttendanceStatus = (clockInTime, clockOutTime, policy, dateRef, t
     result.lateByMinutes = diffMinutes;
   }
 
+  // Clock-in-time half-day cutoff (e.g. "11:00"). Computed in the employee's tz
+  // so it's DST/offset-safe, exactly like shift start. `null`/empty = disabled.
+  let clockedInAfterHalfDayCutoff = false;
+  if (policy.halfDayIfClockInAfter) {
+    const [cutH, cutM] = String(policy.halfDayIfClockInAfter).split(':').map(Number);
+    if (!Number.isNaN(cutH) && !Number.isNaN(cutM)) {
+      const cutoffUTC = localTimeToUTC(dateRef, cutH, cutM, timezone);
+      clockedInAfterHalfDayCutoff = clockInMs > cutoffUTC.getTime();
+    }
+  }
+
   // No clock-out yet — can't calculate total hours or final status
   if (!clockOutTime) {
-    if (diffMinutes > policy.lateMarkAfterMinutes) {
+    // If they arrived after the cutoff and full-hours can't rescue it, the day is
+    // already a locked-in half day. Otherwise we only know they're "late" so far.
+    if (clockedInAfterHalfDayCutoff && !policy.ignoreHalfDayIfFullHours) {
+      result.status = 'half_day';
+    } else if (diffMinutes > policy.lateMarkAfterMinutes) {
       result.status = 'late';
     }
     return result;
@@ -66,6 +83,16 @@ const calculateAttendanceStatus = (clockInTime, clockOutTime, policy, dateRef, t
     result.status = 'late';
   } else {
     result.status = 'present';
+  }
+
+  // Clock-in-after-cutoff → half day, regardless of hours worked — UNLESS the
+  // policy waives it for someone who still completed full hours. Never downgrade
+  // a worse status (absent stays absent).
+  if (clockedInAfterHalfDayCutoff && result.status !== 'absent') {
+    const fullHoursDone = result.totalHours >= policy.halfDayThresholdHours;
+    if (!(policy.ignoreHalfDayIfFullHours && fullHoursDone)) {
+      result.status = 'half_day';
+    }
   }
 
   // Overtime

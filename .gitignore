@@ -23,3 +23,19 @@ Thumbs.db
 
 # misc
 *.pem
+
+# local one-off data-migration/diagnostic scripts (contain live DB credentials — never commit)
+diag-login.js
+scripts/approve-olio-regularizations.js
+scripts/check-olio-balance.js
+scripts/check-olio-requests.js
+scripts/clear-olio-pending.js
+scripts/create-pune-policy.js
+scripts/inspect-olio-leave.js
+scripts/migrate-olio-attendance.js
+scripts/migrate-olio-leaves.js
+scripts/notify-olio-pending.js
+scripts/seedPayrollData.js
+scripts/seedProdData.js
+scripts/seedProdTestData.js
+scripts/seedPayrollTestData.js

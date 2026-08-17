@@ -44,6 +44,10 @@ const attendanceRecordSchema = new mongoose.Schema(
     isLate:        { type: Boolean, default: false },
     lateByMinutes: { type: Number, default: 0 },
 
+    // Monthly-allowance classification (for occurrence counting)
+    isFlexiLateIn: { type: Boolean, default: false },
+    isEarlyExit:   { type: Boolean, default: false },
+
     missedClockOut: { type: Boolean, default: false },
 
     // ─── Override ─────────────────────────────────────────────────────────────
@@ -64,6 +68,10 @@ const attendanceRecordSchema = new mongoose.Schema(
       halfDayThresholdHours:  { type: Number, default: null },
       absentThresholdHours:   { type: Number, default: null },
       overtimeThresholdHours: { type: Number, default: null },
+      halfDayIfClockInAfter:    { type: String,  default: null },
+      ignoreHalfDayIfFullHours: { type: Boolean, default: false },
+      flexiLateInsPerMonth:     { type: Number,  default: 0 },
+      earlyExitsPerMonth:       { type: Number,  default: 0 },
     },
   },
   { timestamps: true }

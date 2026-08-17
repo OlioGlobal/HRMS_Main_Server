@@ -10,7 +10,7 @@ const getEmployeeBalances = async (companyId, employeeId, year) => {
   if (year) filter.year = Number(year);
 
   return LeaveBalance.find(filter)
-    .populate('leaveType_id', 'name code type daysPerYear allowHalfDay minDaysNotice maxDaysAtOnce requiresDocument countWeekends countHolidays')
+    .populate('leaveType_id', 'name code type daysPerYear allowHalfDay minDaysNotice maxDaysAtOnce requiresDocument countWeekends countHolidays restrictDuringProbation probationOnly')
     .lean({ virtuals: true });
 };
 

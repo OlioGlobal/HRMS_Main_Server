@@ -7,6 +7,7 @@ const Company                = require('../../models/Company');
 const WorkPolicy             = require('../../models/WorkPolicy');
 const AppError               = require('../../utils/AppError');
 const { calculateAttendanceStatus } = require('../../utils/calculateAttendanceStatus');
+const { classifyDay, applyAllowance } = require('../../utils/monthlyAllowances');
 
 const toObjectId = (id) => new mongoose.Types.ObjectId(id);
 
@@ -211,6 +212,10 @@ const approve = async (companyId, requestId, reviewerId, reviewNote) => {
             halfDayThresholdHours:  policy.halfDayThresholdHours,
             absentThresholdHours:   policy.absentThresholdHours,
             overtimeThresholdHours: policy.overtimeThresholdHours,
+            halfDayIfClockInAfter:    policy.halfDayIfClockInAfter ?? null,
+            ignoreHalfDayIfFullHours: policy.ignoreHalfDayIfFullHours ?? false,
+            flexiLateInsPerMonth:     policy.flexiLateInsPerMonth ?? 0,
+            earlyExitsPerMonth:       policy.earlyExitsPerMonth ?? 0,
           };
         }
       }
@@ -228,15 +233,31 @@ const approve = async (companyId, requestId, reviewerId, reviewNote) => {
         tz = co?.settings?.timezone || 'UTC';
       }
 
+      const snap = record.workPolicySnapshot;
       const calc = calculateAttendanceStatus(
-        record.clockInTime, record.clockOutTime,
-        record.workPolicySnapshot, record.date, tz,
+        record.clockInTime, record.clockOutTime, snap, record.date, tz,
       );
-      record.status        = calc.status;
       record.isLate        = calc.isLate;
       record.lateByMinutes = calc.lateByMinutes;
       record.totalHours    = calc.totalHours;
       record.overtimeHours = calc.overtimeHours;
+
+      // Monthly flexi/early-exit allowance (same rules as clock-out)
+      const cls = classifyDay(calc, record.clockInTime, record.clockOutTime, snap, record.date, tz);
+      record.isFlexiLateIn = cls.isFlexiLateIn;
+      record.isEarlyExit   = cls.isEarlyExit;
+      const flexiOn = (snap?.flexiLateInsPerMonth || 0) > 0 && cls.isFlexiLateIn;
+      const earlyOn = (snap?.earlyExitsPerMonth || 0) > 0 && cls.isEarlyExit;
+      if (flexiOn || earlyOn) {
+        const dd = new Date(record.date);
+        const monthStart = new Date(Date.UTC(dd.getUTCFullYear(), dd.getUTCMonth(), 1));
+        const scope = { company_id: record.company_id, employee_id: record.employee_id, date: { $gte: monthStart, $lt: record.date }, _id: { $ne: record._id } };
+        const priorFlexi     = flexiOn ? await AttendanceRecord.countDocuments({ ...scope, isFlexiLateIn: true }) : 0;
+        const priorEarlyExit = earlyOn ? await AttendanceRecord.countDocuments({ ...scope, isEarlyExit: true }) : 0;
+        record.status = applyAllowance(calc, cls, { policy: snap, priorFlexi, priorEarlyExit }).status;
+      } else {
+        record.status = calc.status;
+      }
     }
 
     await record.save();

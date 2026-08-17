@@ -42,6 +42,16 @@ const workPolicySchema = new mongoose.Schema(
     absentThresholdHours:   { type: Number, default: 2   },  // worked < X hrs = absent
     overtimeThresholdHours: { type: Number, default: 8   },  // worked > X hrs = overtime begins
 
+    // Clock-in after this local "HH:mm" forces a half day (e.g. "11:00"). null = off.
+    halfDayIfClockInAfter:    { type: String,  default: null },
+    // If true, waive the above cutoff half-day when the employee still completed
+    // full hours (>= halfDayThresholdHours).
+    ignoreHalfDayIfFullHours: { type: Boolean, default: false },
+
+    // ─── Monthly allowances (occurrence-based; enforced by the attendance service, not the per-day engine) ──
+    flexiLateInsPerMonth:   { type: Number, default: 0 },  // free late-ins within grace window before escalating; 0 = off
+    earlyExitsPerMonth:     { type: Number, default: 0 },  // approved early exits allowed per month; 0 = off
+
     // ─── Overtime & Late Payroll Rules ────────────────────────────────────────────
     overtimeEnabled:            { type: Boolean, default: false },
     overtimeCompensationType:   { type: String,  enum: ['pay', 'comp_off', 'both'], default: 'pay' },

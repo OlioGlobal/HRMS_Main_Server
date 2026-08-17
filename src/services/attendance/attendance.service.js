@@ -7,6 +7,7 @@ const Company            = require('../../models/Company');
 const AppError           = require('../../utils/AppError');
 const { detectClockType, haversineDistance } = require('../../utils/geofence');
 const { calculateAttendanceStatus } = require('../../utils/calculateAttendanceStatus');
+const { classifyDay, applyAllowance } = require('../../utils/monthlyAllowances');
 
 const toObjectId = (id) => new mongoose.Types.ObjectId(id);
 
@@ -22,6 +23,33 @@ const getWorkPolicy = async (employee) => {
   return def;
 };
 
+/**
+ * Apply monthly flexi/early-exit allowances to a finalized day and set its
+ * status + classification flags. Counts prior same-type days in the same
+ * calendar month (by date, deterministic). No-op unless the policy enables a
+ * counter and the day qualifies. Mutates `record`.
+ */
+const applyMonthlyAllowances = async (record, calc, snap, tz) => {
+  const cls = classifyDay(calc, record.clockInTime, record.clockOutTime, snap, record.date, tz);
+  record.isFlexiLateIn = cls.isFlexiLateIn;
+  record.isEarlyExit   = cls.isEarlyExit;
+
+  const flexiOn = (snap?.flexiLateInsPerMonth || 0) > 0 && cls.isFlexiLateIn;
+  const earlyOn = (snap?.earlyExitsPerMonth || 0) > 0 && cls.isEarlyExit;
+  if (!flexiOn && !earlyOn) { record.status = calc.status; return; }
+
+  const d = new Date(record.date);
+  const monthStart = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1));
+  const scope = {
+    company_id: record.company_id, employee_id: record.employee_id,
+    date: { $gte: monthStart, $lt: record.date }, _id: { $ne: record._id },
+  };
+  const priorFlexi     = flexiOn ? await AttendanceRecord.countDocuments({ ...scope, isFlexiLateIn: true }) : 0;
+  const priorEarlyExit = earlyOn ? await AttendanceRecord.countDocuments({ ...scope, isEarlyExit: true }) : 0;
+
+  record.status = applyAllowance(calc, cls, { policy: snap, priorFlexi, priorEarlyExit }).status;
+};
+
 const snapshotPolicy = (policy) => ({
   workStart:              policy.workStart,
   workEnd:                policy.workEnd,
@@ -30,6 +58,10 @@ const snapshotPolicy = (policy) => ({
   halfDayThresholdHours:  policy.halfDayThresholdHours,
   absentThresholdHours:   policy.absentThresholdHours,
   overtimeThresholdHours: policy.overtimeThresholdHours,
+  halfDayIfClockInAfter:    policy.halfDayIfClockInAfter ?? null,
+  ignoreHalfDayIfFullHours: policy.ignoreHalfDayIfFullHours ?? false,
+  flexiLateInsPerMonth:     policy.flexiLateInsPerMonth ?? 0,
+  earlyExitsPerMonth:       policy.earlyExitsPerMonth ?? 0,
 });
 
 /**
@@ -282,11 +314,11 @@ const clockOut = async (companyId, userId, body) => {
   const snap = record.workPolicySnapshot;
   const calc = calculateAttendanceStatus(record.clockInTime, now, snap, today, tz);
 
-  record.status        = calc.status;
   record.isLate        = calc.isLate;
   record.lateByMinutes = calc.lateByMinutes;
   record.totalHours    = calc.totalHours;
   record.overtimeHours = calc.overtimeHours;
+  await applyMonthlyAllowances(record, calc, snap, tz);  // sets status + flexi/early flags
 
   await record.save();
   return record.toObject();

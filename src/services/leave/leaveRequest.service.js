@@ -31,11 +31,15 @@ const applyLeave = async (companyId, employeeId, body) => {
     throw new AppError(`This leave type is only for ${leaveType.applicableGender} employees.`, 400);
   }
 
-  // ── Probation check ──
-  if (leaveType.restrictDuringProbation && employee.probationEndDate) {
-    if (today.getTime() < parseCivil(employee.probationEndDate).getTime()) {
-      throw new AppError('This leave type is not available during probation period.', 400);
-    }
+  // ── Probation checks ──
+  const inProbation = !!employee.probationEndDate
+    && today.getTime() < parseCivil(employee.probationEndDate).getTime();
+
+  if (leaveType.restrictDuringProbation && inProbation) {
+    throw new AppError('This leave type is not available during probation period.', 400);
+  }
+  if (leaveType.probationOnly && !inProbation) {
+    throw new AppError('This leave type is only available during the probation period.', 400);
   }
 
   // ── Notice period check ──

@@ -88,6 +88,11 @@ const leaveTypeSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    // Usable ONLY during probation, and hidden/blocked once probation ends.
+    probationOnly: {
+      type: Boolean,
+      default: false,
+    },
     restrictDuringNotice: {
       type: Boolean,
       default: false,
