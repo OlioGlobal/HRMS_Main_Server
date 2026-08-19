@@ -9,7 +9,7 @@ const eventBus     = require('../../utils/eventBus');
 const { calculateLeaveDays } = require('../../utils/calculateLeaveDays');
 const { getLeaveYear }       = require('../../utils/getLeaveYear');
 const { parseCivil, diffDays, todayCivil } = require('../../utils/civilDate');
-const { findWorkedDayInRange } = require('../../utils/leaveAttendanceLink');
+const { findWorkedDayInRange, syncLeaveAttendance } = require('../../utils/leaveAttendanceLink');
 
 const toObjectId = (id) => new mongoose.Types.ObjectId(id);
 
@@ -364,6 +364,9 @@ const approveLeave = async (companyId, requestId, reviewerId, reviewNote) => {
     }
   }
 
+  // Mark the leave days as on_leave in attendance (overrides any auto-absent)
+  await syncLeaveAttendance(companyId, request, { revert: false });
+
   const approvedResult = request.toObject();
   eventBus.emit('leave.approved', { companyId, leaveRequest: approvedResult, employee: await Employee.findById(request.employee_id).lean() });
   return approvedResult;
@@ -436,6 +439,11 @@ const cancelLeave = async (companyId, employeeId, requestId) => {
       }
       await balance.save();
     }
+  }
+
+  // If it was approved, undo the on_leave attendance it created
+  if (wasApproved) {
+    await syncLeaveAttendance(companyId, request, { revert: true });
   }
 
   const cancelledResult = request.toObject();

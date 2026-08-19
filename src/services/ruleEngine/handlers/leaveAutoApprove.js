@@ -60,6 +60,10 @@ const findRecipients = async (companyId, contextData, config) => {
           }
         }
 
+        // Mark leave days as on_leave in attendance (same as manual approval)
+        const { syncLeaveAttendance } = require('../../../utils/leaveAttendanceLink');
+        await syncLeaveAttendance(companyId, { ...request, status: 'approved' }, { revert: false });
+
         // Get employee for notification
         const employee = await Employee.findById(request.employee_id)
           .select('_id user_id firstName lastName employeeId reportingManager_id')
