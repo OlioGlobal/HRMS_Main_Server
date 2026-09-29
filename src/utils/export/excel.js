@@ -1,7 +1,8 @@
 // ─── Excel export helper (exceljs) ───────────────────────────────────────────
 // Builds a styled .xlsx workbook buffer from one or more sheet definitions.
 // Kept generic so both the attendance and payroll reports can reuse it.
-const ExcelJS = require('exceljs');
+// NOTE: `exceljs` is required lazily (inside buildWorkbook) so a missing dep can
+// never crash server startup — only the report endpoints fail until it's installed.
 
 const HEADER_FILL   = 'FF18181B'; // zinc-900 (matches app theme)
 const HEADER_FONT   = 'FFFFFFFF';
@@ -139,6 +140,7 @@ const applyFormat = (cell, type) => {
  * @returns {Promise<Buffer>}
  */
 const buildWorkbook = async (sheets) => {
+  const ExcelJS = require('exceljs');
   const wb = new ExcelJS.Workbook();
   wb.creator = 'HRMS';
   wb.created = new Date();

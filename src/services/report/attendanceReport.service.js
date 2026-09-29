@@ -5,7 +5,7 @@
 // Colours make each status obvious at a glance. Reuses the app's civil-day /
 // work-policy / holiday / leave conventions so statuses match the calendar.
 const mongoose         = require('mongoose');
-const ExcelJS          = require('exceljs');
+// exceljs is required lazily inside renderWorkbook so a missing dep can't crash startup.
 const Employee         = require('../../models/Employee');
 const AttendanceRecord = require('../../models/AttendanceRecord');
 const RegularizationRequest = require('../../models/RegularizationRequest');
@@ -210,6 +210,7 @@ const generateAttendanceReport = async (companyId, { month, year, employeeId, te
 // ─── ExcelJS rendering ────────────────────────────────────────────────────────
 const NCOLS = 6; // A..F
 const renderWorkbook = async ({ company, month, year, count, blocks }) => {
+  const ExcelJS = require('exceljs');
   const wb = new ExcelJS.Workbook();
   wb.creator = 'HRMS';
   const ws = wb.addWorksheet(`${MONTHS[month - 1].slice(0, 3)} ${year}`);
