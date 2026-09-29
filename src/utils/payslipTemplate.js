@@ -97,6 +97,9 @@ const buildPayslipData = ({ record, employee, company, configSnapshot }) => {
     employeeId:    employee?.employeeId || '',
     designation,
     department,
+    // Manual salary slips aren't attendance-based, so the Total Days row is
+    // suppressed for them (record.hideTotalDays set by the manual-slip service).
+    hideTotalDays: record.hideTotalDays === true,
     totalDays:     record.totalWorkingDays || record.effectiveWorkingDays || 0,
     earnings,
     deductions,
@@ -105,7 +108,7 @@ const buildPayslipData = ({ record, employee, company, configSnapshot }) => {
     netPay:        record.netPay || 0,
     amountInWords: amountInWords(record.netPay || 0, currency),
     fmt,
-    footerText:    cfg.footerText || 'This is a computer-generated payslip',
+    footerText:    (cfg.footerText || '').trim(),
     signatoryName: cfg.signatoryName || '',
     signatoryLabel: cfg.signatoryLabel || 'Authorized Signatory',
     signatureDataUri: toDataUri(cfg.signatureImage),
@@ -173,7 +176,7 @@ const renderPayslipHtml = (d) => {
   .header { display: flex; justify-content: space-between; align-items: flex-start; }
   .company-name { font-size: 18px; font-weight: 700; letter-spacing: .3px; }
   .address { font-size: 10.5px; color: #333; line-height: 1.5; margin-top: 4px; max-width: 340px; }
-  .logo { max-height: 60px; max-width: 150px; object-fit: contain; }
+  .logo { max-height: 90px; max-width: 220px; object-fit: contain; }
 
   /* Title */
   .title-block { text-align: center; margin: 26px 0 20px; }
@@ -203,7 +206,7 @@ const renderPayslipHtml = (d) => {
   .sig { width: 45%; text-align: left; }
   .sig.right { text-align: left; }
   .sig-name { font-size: 12px; min-height: 16px; }
-  .sig-img { max-height: 46px; max-width: 150px; object-fit: contain; display: block; margin: 2px 0; }
+  .sig-img { max-height: 70px; max-width: 200px; object-fit: contain; display: block; margin: 2px 0; }
   .sig-img-empty { height: 30px; }
   .sig-line { border-top: 1px dashed #333; width: 200px; margin-top: 34px; }
   .sig.hasimg .sig-line { margin-top: 4px; }
@@ -233,7 +236,7 @@ const renderPayslipHtml = (d) => {
         <tr><td class="k">Name of Employee</td><td>${esc(d.employeeName)}</td></tr>
         <tr><td class="k">Designation</td><td>${esc(d.designation)}</td></tr>
         <tr><td class="k">Department</td><td>${esc(d.department)}</td></tr>
-        <tr><td class="k">Total Days</td><td>${esc(d.totalDays)}</td></tr>
+        ${d.hideTotalDays ? '' : `<tr><td class="k">Total Days</td><td>${esc(d.totalDays)}</td></tr>`}
       </table>
 
       <table class="ed-table">
@@ -262,7 +265,7 @@ const renderPayslipHtml = (d) => {
         </div>
       </div>
 
-      <div class="footer">${esc(d.footerText)}</div>
+      ${d.footerText ? `<div class="footer">${esc(d.footerText)}</div>` : ''}
     </div>
   </div>
 </body>

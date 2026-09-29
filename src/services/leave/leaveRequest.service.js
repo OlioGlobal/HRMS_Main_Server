@@ -14,7 +14,12 @@ const { findWorkedDayInRange, syncLeaveAttendance } = require('../../utils/leave
 const toObjectId = (id) => new mongoose.Types.ObjectId(id);
 
 // ─── Apply for leave ────────────────────────────────────────────────────────
-const applyLeave = async (companyId, employeeId, body) => {
+// opts.hrOverride: when HR applies on an employee's behalf, skip the self-service
+// guards (probation restriction, notice-period restriction, advance-notice) so HR
+// can back-date leave and cover probationers. Data-integrity checks (balance,
+// overlap, worked-day conflict, gender, max-days) still apply.
+const applyLeave = async (companyId, employeeId, body, opts = {}) => {
+  const { hrOverride = false } = opts;
   const employee = await Employee.findOne({ _id: employeeId, company_id: companyId }).lean();
   if (!employee) throw new AppError('Employee not found.', 404);
 
@@ -35,16 +40,18 @@ const applyLeave = async (companyId, employeeId, body) => {
   const inProbation = !!employee.probationEndDate
     && today.getTime() < parseCivil(employee.probationEndDate).getTime();
 
-  if (leaveType.restrictDuringProbation && inProbation) {
-    throw new AppError('This leave type is not available during probation period.', 400);
-  }
-  if (leaveType.probationOnly && !inProbation) {
-    throw new AppError('This leave type is only available during the probation period.', 400);
-  }
+  if (!hrOverride) {
+    if (leaveType.restrictDuringProbation && inProbation) {
+      throw new AppError('This leave type is not available during probation period.', 400);
+    }
+    if (leaveType.probationOnly && !inProbation) {
+      throw new AppError('This leave type is only available during the probation period.', 400);
+    }
 
-  // ── Notice period check ──
-  if (leaveType.restrictDuringNotice && employee.status === 'notice') {
-    throw new AppError('This leave type is not available during notice period.', 400);
+    // ── Notice period check ──
+    if (leaveType.restrictDuringNotice && employee.status === 'notice') {
+      throw new AppError('This leave type is not available during notice period.', 400);
+    }
   }
 
   // ── Half day ──
@@ -64,8 +71,8 @@ const applyLeave = async (companyId, employeeId, body) => {
     throw new AppError('Half-day leave must be for a single day.', 400);
   }
 
-  // ── Notice period check ──
-  if (leaveType.minDaysNotice > 0) {
+  // ── Advance-notice check ──
+  if (!hrOverride && leaveType.minDaysNotice > 0) {
     const noticeDays = diffDays(today, startDate);
     if (noticeDays < leaveType.minDaysNotice) {
       throw new AppError(`This leave requires at least ${leaveType.minDaysNotice} day(s) advance notice.`, 400);
@@ -181,6 +188,38 @@ const applyLeave = async (companyId, employeeId, body) => {
   const result = request.toObject();
   eventBus.emit('leave.applied', { companyId, leaveRequest: result, employee });
   return result;
+};
+
+// ─── HR: apply leave on an employee's behalf ────────────────────────────────
+// Reuses applyLeave (with hrOverride) then, unless told otherwise, immediately
+// approves it so the leave reflects on the employee's account/attendance at once.
+// Enforces the approver's permission scope against the target employee.
+const hrApplyLeave = async (companyId, targetEmployeeId, body, { reviewerUserId, scope = 'global', autoApprove = true } = {}) => {
+  const target = await Employee.findOne({ _id: targetEmployeeId, company_id: companyId })
+    .select('_id department_id team_id user_id').lean();
+  if (!target) throw new AppError('Employee not found.', 404);
+
+  // Scope guard — a non-global approver may only act within their dept/team.
+  if (scope !== 'global') {
+    const requester = await Employee.findOne({ user_id: reviewerUserId, company_id: companyId })
+      .select('department_id team_id').lean();
+    if (scope === 'self') {
+      throw new AppError('You are not allowed to apply leave for other employees.', 403);
+    }
+    if (scope === 'department' && String(target.department_id) !== String(requester?.department_id)) {
+      throw new AppError('You can only apply leave for employees in your department.', 403);
+    }
+    if (scope === 'team' && String(target.team_id) !== String(requester?.team_id)) {
+      throw new AppError('You can only apply leave for employees in your team.', 403);
+    }
+  }
+
+  const request = await applyLeave(companyId, targetEmployeeId, body, { hrOverride: true });
+
+  if (autoApprove) {
+    return approveLeave(companyId, request._id, reviewerUserId, body.reviewNote || 'Applied by HR on behalf of employee.');
+  }
+  return request;
 };
 
 // ─── List requests for one employee (My Leaves) ────────────────────────────
@@ -453,6 +492,7 @@ const cancelLeave = async (companyId, employeeId, requestId) => {
 
 module.exports = {
   applyLeave,
+  hrApplyLeave,
   getMyLeaves,
   listPendingRequests,
   listAllRequests,

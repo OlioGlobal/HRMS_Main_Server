@@ -7,11 +7,40 @@
 
 let _browserPromise = null;
 
+// Resolve a Chromium executable to launch. Puppeteer's bundled download can be
+// missing/corrupt (e.g. an incomplete or OneDrive-placeholder chrome.exe, which
+// fails with "spawn UNKNOWN"). Prefer an explicit env override, then a locally
+// installed Chrome/Edge, and only fall back to puppeteer's bundled binary.
+const _resolveExecutablePath = () => {
+  const fs = require('fs');
+  const candidates = [
+    process.env.PUPPETEER_EXECUTABLE_PATH,
+    // Windows
+    'C:/Program Files/Google/Chrome/Application/chrome.exe',
+    'C:/Program Files (x86)/Google/Chrome/Application/chrome.exe',
+    'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
+    'C:/Program Files/Microsoft/Edge/Application/msedge.exe',
+    // macOS
+    '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+    // Linux
+    '/usr/bin/google-chrome',
+    '/usr/bin/chromium-browser',
+    '/usr/bin/chromium',
+  ].filter(Boolean);
+
+  for (const p of candidates) {
+    try { if (fs.existsSync(p)) return p; } catch { /* ignore */ }
+  }
+  return null; // let puppeteer use its bundled binary
+};
+
 const _getBrowser = async () => {
   const puppeteer = require('puppeteer');
   if (!_browserPromise) {
+    const executablePath = _resolveExecutablePath();
     _browserPromise = puppeteer.launch({
       headless: 'new',
+      ...(executablePath ? { executablePath } : {}),
       args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
     }).catch((err) => {
       // Reset so a later call can retry after a transient launch failure

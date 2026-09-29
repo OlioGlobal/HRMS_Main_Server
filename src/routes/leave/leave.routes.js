@@ -44,6 +44,8 @@ router.patch('/balances/:id/adjust',      authenticate, authorize('leave_balance
 
 // ─── Leave Requests ─────────────────────────────────────────────────────────
 router.post( '/requests',              authenticate, applyLeaveValidator, requestCtrl.apply);
+// HR / manager applies leave for an employee (gated on approve + scope-checked in service)
+router.post( '/requests/for/:employeeId', authenticate, authorize('leave_requests', 'approve'), applyLeaveValidator, requestCtrl.applyForEmployee);
 router.get(  '/requests/me',           authenticate, requestCtrl.myLeaves);
 router.get(  '/requests/pending',      authenticate, authorize('leave_requests', 'approve'), requestCtrl.pending);
 router.get(  '/requests/all',          authenticate, authorize('leave_requests', 'view'), requestCtrl.listAll);

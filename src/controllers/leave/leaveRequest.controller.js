@@ -17,6 +17,21 @@ const apply = catchAsync(async (req, res) => {
   sendSuccess(res, { status: 201, message: 'Leave request submitted.', data: { request } });
 });
 
+// HR / manager applies leave on behalf of an employee (optionally auto-approved).
+const applyForEmployee = catchAsync(async (req, res) => {
+  const { autoApprove, ...body } = req.body;
+  const request = await service.hrApplyLeave(req.user.companyId, req.params.employeeId, body, {
+    reviewerUserId: req.user.userId,
+    scope: req.permissionScope,
+    autoApprove: autoApprove !== false, // default: apply + approve
+  });
+  sendSuccess(res, {
+    status: 201,
+    message: autoApprove === false ? 'Leave request created for employee.' : 'Leave applied for employee.',
+    data: { request },
+  });
+});
+
 const myLeaves = catchAsync(async (req, res) => {
   const emp = await resolveEmployee(req.user.userId, req.user.companyId);
   const result = await service.getMyLeaves(req.user.companyId, emp._id, req.query);
@@ -69,4 +84,4 @@ const cancel = catchAsync(async (req, res) => {
   sendSuccess(res, { message: 'Leave cancelled.', data: { request } });
 });
 
-module.exports = { apply, myLeaves, pending, listAll, approve, reject, cancel };
+module.exports = { apply, applyForEmployee, myLeaves, pending, listAll, approve, reject, cancel };

@@ -11,6 +11,7 @@ const teamRoutes        = require('./team/team.routes');
 const workPolicyRoutes  = require('./workPolicy/workPolicy.routes');
 const employeeRoutes    = require('./employee/employee.routes');
 const salaryRoutes      = require('./salary/salary.routes');
+const salarySlipRoutes  = require('./salarySlip/salarySlip.routes');
 const designationRoutes = require('./designation/designation.routes');
 const holidayRoutes     = require('./holiday/holiday.routes');
 const leaveRoutes       = require('./leave/leave.routes');
@@ -29,6 +30,7 @@ const hiringPipelineRoutes = require('./letters/hiringPipeline.routes');
 const generatedLetterRoutes= require('./letters/generatedLetter.routes');
 const preboardingRoutes    = require('./preboarding/preboarding.routes');
 const candidateRoutes      = require('./hiring/candidates.routes');
+const reportRoutes         = require('./report/report.routes');
 const adminRoutes          = require('./admin/index');
 
 // ─── Mount All Routes ──────────────────────────────────────────────────────────
@@ -43,6 +45,7 @@ router.use('/teams',         teamRoutes);
 router.use('/work-policies', workPolicyRoutes);
 router.use('/employees',     employeeRoutes);
 router.use('/salary',        salaryRoutes);
+router.use('/salary-slips',  salarySlipRoutes);
 router.use('/designations',  designationRoutes);
 router.use('/holidays',      holidayRoutes);
 router.use('/leave',         leaveRoutes);
@@ -61,5 +64,6 @@ router.use('/hiring-pipelines',   hiringPipelineRoutes);
 router.use('/letters',            generatedLetterRoutes);
 router.use('/preboarding',        preboardingRoutes);
 router.use('/hiring/candidates',  candidateRoutes);
+router.use('/reports',            reportRoutes);
 
 module.exports = router;

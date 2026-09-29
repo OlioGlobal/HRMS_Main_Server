@@ -113,9 +113,16 @@ const createEmployeeValidator = [
     .notEmpty().withMessage('Joining date is required.')
     .isISO8601().withMessage('Invalid joining date.'),
 
+  // Email + role are REQUIRED on create — every employee gets a portal account
+  // and is emailed a temporary password.
   body('email')
-    .optional({ nullable: true })
-    .trim().isEmail().withMessage('Invalid email address.'),
+    .trim().notEmpty().withMessage('Email is required.')
+    .isEmail().withMessage('Invalid email address.'),
+
+  body('role_id')
+    .customSanitizer((v) => (v === '' ? null : v))
+    .notEmpty().withMessage('A role is required.')
+    .isMongoId().withMessage('Invalid role ID.'),
 
   body('employeeId')
     .optional({ nullable: true })
@@ -154,6 +161,11 @@ const changeStatusValidator = [
     .notEmpty().withMessage('Status is required.')
     .isIn(['active', 'inactive', 'notice', 'terminated'])
     .withMessage('Invalid status value.'),
+  // Last working day is REQUIRED when putting an employee on notice (drives auto-inactive).
+  body('lastWorkingDay')
+    .if(body('status').equals('notice'))
+    .notEmpty().withMessage('Last working day is required when setting status to notice.')
+    .isISO8601().withMessage('Last working day must be a valid date.'),
   validate,
 ];
 

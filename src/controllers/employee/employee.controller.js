@@ -50,7 +50,7 @@ const updateEmployee = catchAsync(async (req, res) => {
 });
 
 const changeStatus = catchAsync(async (req, res) => {
-  const employee = await svc.changeStatus(req.user.companyId, req.params.id, req.body.status);
+  const employee = await svc.changeStatus(req.user.companyId, req.params.id, req.body.status, req.body.lastWorkingDay);
   sendSuccess(res, { message: 'Status updated.', data: { employee } });
 });
 

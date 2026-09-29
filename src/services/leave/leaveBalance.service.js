@@ -9,9 +9,16 @@ const getEmployeeBalances = async (companyId, employeeId, year) => {
   const filter = { company_id: companyId, employee_id: employeeId };
   if (year) filter.year = Number(year);
 
-  return LeaveBalance.find(filter)
+  // NOTE: the `remaining` virtual is NOT included by `.lean({ virtuals: true })`
+  // because the schema has no mongoose-lean-virtuals plugin — compute it explicitly.
+  const balances = await LeaveBalance.find(filter)
     .populate('leaveType_id', 'name code type daysPerYear allowHalfDay minDaysNotice maxDaysAtOnce requiresDocument countWeekends countHolidays restrictDuringProbation probationOnly')
-    .lean({ virtuals: true });
+    .lean();
+
+  return balances.map((b) => ({
+    ...b,
+    remaining: (b.allocated || 0) + (b.carryForward || 0) + (b.adjustment || 0) - (b.used || 0) - (b.pending || 0),
+  }));
 };
 
 // ─── List all balances (HR view) ────────────────────────────────────────────

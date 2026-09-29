@@ -134,6 +134,16 @@ const getMyEmployee = async (companyId, userId) => {
 
 // ─── Create employee ───────────────────────────────────────────────────────────
 const createEmployee = async (companyId, body, requestingUserId) => {
+  // Portal access + role are mandatory: every new employee gets a login account and
+  // is emailed a temporary password. Validate up front so we never create an
+  // employee record without its portal account.
+  if (!body.email) throw new AppError('Email is required — a portal account is created for every employee.', 400);
+  if (!body.role_id) throw new AppError('A role is required for the portal account.', 400);
+
+  const emailLower = body.email.toLowerCase();
+  const existingUser = await User.findOne({ email: emailLower, company_id: companyId });
+  if (existingUser) throw new AppError('A portal account with this email already exists.', 409);
+
   // Auto-generate or use provided employeeId
   const employeeId = body.employeeId?.trim() || await _generateEmployeeId(companyId);
 
@@ -170,7 +180,7 @@ const createEmployee = async (companyId, body, requestingUserId) => {
   }
 
   // ── Probation auto-calculation ──
-  const company = await Company.findById(companyId).select('settings').lean();
+  const company = await Company.findById(companyId).select('settings name').lean();
   const probDays = body.probationDays != null ? Number(body.probationDays) : (company?.settings?.defaultProbationDays ?? 90);
 
   employeeData.probationDays = probDays;
@@ -242,37 +252,57 @@ const createEmployee = async (companyId, body, requestingUserId) => {
     }
   }
 
-  let tempPassword = null;
+  // ── Portal account (always) — create user, assign role, email credentials ──
+  const tempPassword = _generateTempPassword();
 
-  // Step 3 — portal access
-  if (body.portalAccess && body.email) {
-    const existingUser = await User.findOne({ email: body.email.toLowerCase(), company_id: companyId });
-    if (existingUser) throw new AppError('A portal account with this email already exists.', 409);
+  const user = await User.create({
+    company_id: companyId,
+    firstName:  body.firstName,
+    lastName:   body.lastName,
+    email:      emailLower,
+    password:   tempPassword,
+    status:     'active',
+    mustChangePassword: true,
+  });
 
-    tempPassword = _generateTempPassword();
+  employee.user_id = user._id;
+  await employee.save();
 
-    const user = await User.create({
-      company_id: companyId,
-      firstName:  body.firstName,
-      lastName:   body.lastName,
-      email:      body.email.toLowerCase(),
-      password:   tempPassword,
-      status:     'active',
-      mustChangePassword: true,
+  await UserRole.create({
+    user_id:    user._id,
+    role_id:    body.role_id,
+    company_id: companyId,
+    assignedBy: requestingUserId,
+  });
+
+  // Email the temporary password to the employee. Best-effort: a mail failure must
+  // not roll back the created employee/account — HR still sees the password on screen.
+  try {
+    const { sendEmail } = require('../../utils/email');
+    const { buildEmail } = require('../../utils/emailTemplates');
+    const loginUrl = `${(process.env.CLIENT_URL || 'http://localhost:3000').replace(/\/+$/, '')}/login`;
+    const html = buildEmail({
+      accent: '#D97706',
+      icon: '🔑',
+      iconBg: '#fff7ed',
+      title: 'Your HRMS account is ready',
+      greeting: `Hi ${body.firstName},`,
+      intro: `A portal account has been created for you at <strong>${company?.name || 'your company'}</strong>. Sign in with the temporary password below, then change it on first login.`,
+      rows: [
+        ['Login URL', loginUrl],
+        ['Email', emailLower],
+        ['Temporary Password', tempPassword],
+      ],
+      note: 'For security, please change your password immediately after your first login. If you did not expect this email, contact your HR team.',
+      preheader: 'Your HRMS login credentials',
     });
-
-    employee.user_id = user._id;
-    await employee.save();
-
-    // Assign role if provided
-    if (body.role_id) {
-      await UserRole.create({
-        user_id:    user._id,
-        role_id:    body.role_id,
-        company_id: companyId,
-        assignedBy: requestingUserId,
-      });
-    }
+    await sendEmail({
+      to: emailLower,
+      subject: `Welcome to ${company?.name || 'HRMS'} — your login details`,
+      html,
+    });
+  } catch (err) {
+    console.error('[createEmployee] credentials email failed:', err.message);
   }
 
   const populated = await Employee.findById(employee._id)
@@ -334,9 +364,25 @@ const updateEmployee = async (companyId, id, body) => {
 };
 
 // ─── Change status ─────────────────────────────────────────────────────────────
-const changeStatus = async (companyId, id, status) => {
+const changeStatus = async (companyId, id, status, lastWorkingDay) => {
   const employee = await Employee.findOne({ _id: id, company_id: companyId, isActive: true });
   if (!employee) throw new AppError('Employee not found.', 404);
+
+  if (status === 'notice') {
+    // Notice requires a last working day — it drives the auto-inactive cron.
+    if (!lastWorkingDay) throw new AppError('Last working day is required when setting status to notice.', 400);
+    const lwd = new Date(lastWorkingDay);
+    if (isNaN(lwd.getTime())) throw new AppError('Invalid last working day.', 400);
+    employee.lastWorkingDay = lwd;
+  } else if (status === 'active') {
+    // Returning to active — clear any prior last working day so the cron won't
+    // re-deactivate a retained employee.
+    employee.lastWorkingDay = null;
+  } else if (lastWorkingDay) {
+    // inactive / terminated may still carry an explicit last working day if provided.
+    const lwd = new Date(lastWorkingDay);
+    if (!isNaN(lwd.getTime())) employee.lastWorkingDay = lwd;
+  }
 
   employee.status = status;
   await employee.save();

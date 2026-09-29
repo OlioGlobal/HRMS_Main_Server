@@ -19,6 +19,7 @@ const { runJob } = require('./runner');
 const autoAbsentJob     = require('./jobs/autoAbsent.job');
 const documentExpiryJob = require('./jobs/documentExpiry.job');
 const leaveResetJob     = require('./jobs/leaveReset.job');
+const autoInactiveJob   = require('./jobs/autoInactive.job');
 
 const registerCronJobs = () => {
   // ─── Auto-Absent: every hour at minute 0 ────────────────────────────────────
@@ -38,6 +39,13 @@ const registerCronJobs = () => {
   // Server-down safe: catches up on next run automatically.
   cron.schedule('5 0 * * *', () => {
     runJob('leave-reset', leaveResetJob.run);
+  }, { runOnInit: false });
+
+  // ─── Auto-Inactive: daily at 00:15 UTC ────────────────────────────────────
+  // Deactivates employees whose last working day has passed (timezone-aware per
+  // company) and revokes their portal login. Offset to avoid the other daily jobs.
+  cron.schedule('15 0 * * *', () => {
+    runJob('auto-inactive', autoInactiveJob.run);
   }, { runOnInit: false });
 
   console.log('[Cron] All cron jobs registered.');
