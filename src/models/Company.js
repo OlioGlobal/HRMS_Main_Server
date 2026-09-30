@@ -65,6 +65,7 @@ const companySchema = new mongoose.Schema(
       payslip: {
         title:                 { type: String, default: 'PAY SLIP' },
         logo:                  { type: String, default: null },      // /uploads/payslip-logos/… — overrides company logo on the slip
+        address:               { type: String, default: '' },        // newline-separated; '' → falls back to company address
         footerText:            { type: String, default: 'This is a computer-generated payslip' },
         signatoryName:         { type: String, default: '' },
         signatoryLabel:        { type: String, default: 'Authorized Signatory' },

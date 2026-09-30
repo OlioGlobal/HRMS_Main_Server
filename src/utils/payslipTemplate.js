@@ -62,9 +62,12 @@ const buildPayslipData = ({ record, employee, company, configSnapshot }) => {
     fmt = (v) => `${currency} ${new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(Math.round(Number(v) || 0))}`;
   }
 
-  // Address lines (skip empties)
+  // Address lines (skip empties). Prefer the payslip-config address override
+  // (newline-separated); fall back to the company's saved address.
   const line2 = [company.city, company.state, company.pincode].filter(Boolean).join(', ');
-  const addressLines = [company.address, line2].filter(Boolean);
+  const addressLines = (cfg.address && cfg.address.trim())
+    ? cfg.address.split('\n').map((l) => l.trim()).filter(Boolean)
+    : [company.address, line2].filter(Boolean);
 
   // Earnings (component earnings + overtime)
   const earnings = [...(record.earnings || []).map((e) => ({ name: e.name, amount: e.amount }))];
@@ -146,14 +149,16 @@ const renderPayslipHtml = (d) => {
 
   const empSig = d.showEmployeeSignature ? `
         <div class="sig">
-          <div class="sig-name">${esc(d.employeeName)}</div>
+          <div class="sig-content top">
+            <div class="sig-name">${esc(d.employeeName)}</div>
+          </div>
           <div class="sig-line"></div>
           <div class="sig-label">Signature of Employee</div>
         </div>` : '<div class="sig"></div>';
 
   const signatoryImg = d.signatureDataUri
     ? `<img class="sig-img" src="${d.signatureDataUri}" alt="signature" />`
-    : '<div class="sig-img-empty"></div>';
+    : '';
 
   return `<!DOCTYPE html>
 <html>
@@ -165,8 +170,8 @@ const renderPayslipHtml = (d) => {
   body { font-family: Arial, 'Helvetica Neue', Helvetica, sans-serif; color: #1a1a1a; font-size: 12px; }
   .page { position: relative; width: 210mm; min-height: 297mm; padding: 18mm 16mm; }
   .watermark {
-    position: absolute; top: 45%; left: 50%;
-    transform: translate(-50%, -50%) rotate(-30deg);
+    position: absolute; top: 35%; left: 50%;
+    transform: translate(-50%, -50%);
     font-size: 46px; font-weight: 700; color: rgba(0,0,0,0.05);
     white-space: nowrap; letter-spacing: 4px; pointer-events: none; z-index: 0;
   }
@@ -176,7 +181,7 @@ const renderPayslipHtml = (d) => {
   .header { display: flex; justify-content: space-between; align-items: flex-start; }
   .company-name { font-size: 18px; font-weight: 700; letter-spacing: .3px; }
   .address { font-size: 10.5px; color: #333; line-height: 1.5; margin-top: 4px; max-width: 340px; }
-  .logo { max-height: 90px; max-width: 220px; object-fit: contain; }
+  .logo { max-height: 120px; max-width: 280px; object-fit: contain; }
 
   /* Title */
   .title-block { text-align: center; margin: 26px 0 20px; }
@@ -199,20 +204,22 @@ const renderPayslipHtml = (d) => {
   .ed-table .net .net-label { text-align: left; }
   .ed-table .net .net-amt { text-align: right; }
 
-  .words { text-align: right; font-style: italic; margin: 10px 2px 0; font-size: 12px; }
+  .ed-table .words-row td { text-align: right; font-style: italic; font-weight: 600; }
 
-  /* Signatures */
+  /* Signatures — fixed-height content area so both columns' lines + labels align */
   .signatures { display: flex; justify-content: space-between; margin-top: 55px; }
   .sig { width: 45%; text-align: left; }
-  .sig.right { text-align: left; }
-  .sig-name { font-size: 12px; min-height: 16px; }
-  .sig-img { max-height: 70px; max-width: 200px; object-fit: contain; display: block; margin: 2px 0; }
-  .sig-img-empty { height: 30px; }
-  .sig-line { border-top: 1px dashed #333; width: 200px; margin-top: 34px; }
-  .sig.hasimg .sig-line { margin-top: 4px; }
+  .sig.right { text-align: right; }
+  .sig-content { height: 100px; display: flex; flex-direction: column; justify-content: flex-end; }
+  .sig-content.top { justify-content: flex-start; }
+  .sig-name { font-size: 12px; }
+  .sig-img { max-height: 90px; max-width: 240px; object-fit: contain; margin: 2px 0; }
+  .sig.right .sig-img { margin-left: auto; }
+  .sig-line { border-top: 1px dashed #333; width: 200px; margin-top: 4px; }
+  .sig.right .sig-line { margin-left: auto; }
   .sig-label { font-size: 11px; color: #333; margin-top: 4px; }
 
-  .footer { margin-top: 40px; font-size: 10px; color: #555; }
+  .footer { margin-top: 40px; font-size: 10px; color: #555; white-space: pre-line; }
 </style>
 </head>
 <body>
@@ -237,6 +244,7 @@ const renderPayslipHtml = (d) => {
         <tr><td class="k">Designation</td><td>${esc(d.designation)}</td></tr>
         <tr><td class="k">Department</td><td>${esc(d.department)}</td></tr>
         ${d.hideTotalDays ? '' : `<tr><td class="k">Total Days</td><td>${esc(d.totalDays)}</td></tr>`}
+        <tr><td>&nbsp;</td><td>&nbsp;</td></tr>
       </table>
 
       <table class="ed-table">
@@ -251,15 +259,18 @@ const renderPayslipHtml = (d) => {
           <td class="net-label">NET SALARY</td>
           <td class="net-amt">${fmt(d.netPay)}</td>
         </tr>
+        <tr class="words-row">
+          <td colspan="4">${esc(d.amountInWords)}</td>
+        </tr>
       </table>
-
-      <div class="words">${esc(d.amountInWords)}</div>
 
       <div class="signatures">
         ${empSig}
-        <div class="sig right ${d.signatureDataUri ? 'hasimg' : ''}">
-          <div class="sig-name">${esc(d.signatoryName)}</div>
-          ${signatoryImg}
+        <div class="sig right">
+          <div class="sig-content">
+            <div class="sig-name">${esc(d.signatoryName)}</div>
+            ${signatoryImg}
+          </div>
           <div class="sig-line"></div>
           <div class="sig-label">${esc(d.signatoryLabel)}</div>
         </div>

@@ -357,7 +357,7 @@ const listPendingApprovals = async (companyId, userId, scope, { status, search, 
                 lastName:   '$employee.lastName',
                 employeeId: '$employee.employeeId',
               },
-              category: {
+              category_id: {
                 _id:  '$category._id',
                 name: '$category.name',
               },

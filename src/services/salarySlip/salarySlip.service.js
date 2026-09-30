@@ -85,13 +85,26 @@ const gradeToComponents = (grade) => {
   return rounded;
 };
 
-// Fetch a grade (populated) and reduce it to a percentage breakdown.
+// Deduction component NAMES from the grade (no amounts — HR types those). Used
+// to prefill the manual slip's deduction rows.
+const gradeDeductionNames = (grade) =>
+  (grade.components || [])
+    .filter((gc) => gc.component_id && gc.component_id.type === 'deduction')
+    .map((gc) => gc.component_id.name);
+
+// Fetch a grade (populated) and reduce it to a percentage breakdown + the names
+// of its deduction components (so the UI can prefill deduction lines).
 const getGradeBreakdown = async (companyId, gradeId) => {
   const grade = await SalaryGrade.findOne({ _id: gradeId, company_id: companyId })
     .populate('components.component_id', 'name type calcType percentOf')
     .lean();
   if (!grade) throw new AppError('Salary grade not found.', 404);
-  return { gradeId: grade._id, name: grade.name, components: gradeToComponents(grade) };
+  return {
+    gradeId:    grade._id,
+    name:       grade.name,
+    components: gradeToComponents(grade),
+    deductionNames: gradeDeductionNames(grade),
+  };
 };
 
 // List grades (id + name only — no amounts) for the picker.
