@@ -42,6 +42,14 @@ const esc = (s) =>
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
 
+// Format a Date/ISO value as "DD Mon YYYY" (UTC — matches how dates are stored).
+const fmtDate = (val) => {
+  if (!val) return '—';
+  const dt = new Date(val);
+  if (isNaN(dt.getTime())) return '—';
+  return `${String(dt.getUTCDate()).padStart(2, '0')} ${MONTHS[dt.getUTCMonth()].slice(0, 3)} ${dt.getUTCFullYear()}`;
+};
+
 // ─── Assemble the flat data object the template needs ─────────────────────────
 // record   – PayrollRecord (decrypted, plain object)
 // employee – Employee with designation_id / department_id optionally populated
@@ -100,6 +108,7 @@ const buildPayslipData = ({ record, employee, company, configSnapshot }) => {
     employeeId:    employee?.employeeId || '',
     designation,
     department,
+    joiningDate:   fmtDate(employee?.joiningDate),
     // Manual salary slips aren't attendance-based, so the Total Days row is
     // suppressed for them (record.hideTotalDays set by the manual-slip service).
     hideTotalDays: record.hideTotalDays === true,
@@ -190,7 +199,7 @@ const renderPayslipHtml = (d) => {
 
   /* Employee info table */
   table { border-collapse: collapse; width: 100%; }
-  .info-table { margin-bottom: 18px; width: 70%; }
+  .info-table { margin: 0 auto 18px; width: 70%; }
   .info-table td { border: 1px solid #333; padding: 7px 10px; font-size: 12px; }
   .info-table td.k { font-weight: 600; width: 40%; }
 
@@ -243,6 +252,7 @@ const renderPayslipHtml = (d) => {
         <tr><td class="k">Name of Employee</td><td>${esc(d.employeeName)}</td></tr>
         <tr><td class="k">Designation</td><td>${esc(d.designation)}</td></tr>
         <tr><td class="k">Department</td><td>${esc(d.department)}</td></tr>
+        <tr><td class="k">Joining Date</td><td>${esc(d.joiningDate)}</td></tr>
         ${d.hideTotalDays ? '' : `<tr><td class="k">Total Days</td><td>${esc(d.totalDays)}</td></tr>`}
         <tr><td>&nbsp;</td><td>&nbsp;</td></tr>
       </table>
