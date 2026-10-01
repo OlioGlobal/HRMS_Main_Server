@@ -148,9 +148,10 @@ const computeSlip = ({ monthlySalary, actualPaid, deductions, components }) => {
   const gross = Math.round(Number(monthlySalary) || 0);
   if (gross <= 0) throw new AppError('Monthly salary must be a positive amount.', 400);
 
+  // Keep named deduction rows even at 0 — a 0 deduction prints as "NA" on the slip.
   const deductionLines = (deductions || [])
-    .filter((d) => d && d.name && Number(d.amount) > 0)
-    .map((d) => ({ name: String(d.name).trim(), amount: Math.round(Number(d.amount)) }));
+    .filter((d) => d && d.name && String(d.name).trim())
+    .map((d) => ({ name: String(d.name).trim(), amount: Math.round(Number(d.amount) || 0) }));
 
   const totalDeductions = deductionLines.reduce((acc, d) => acc + d.amount, 0);
   const netPay = gross - totalDeductions;

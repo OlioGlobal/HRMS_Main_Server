@@ -134,6 +134,9 @@ const buildPayslipData = ({ record, employee, company, configSnapshot }) => {
 const renderPayslipHtml = (d) => {
   const fmt = d.fmt;
 
+  // A zero-value deduction shows "NA" rather than a currency 0.
+  const fmtDed = (v) => (Number(v) === 0 ? 'NA' : fmt(v));
+
   // Pair earnings & deductions row-by-row, padding the shorter column.
   const rowCount = Math.max(d.earnings.length, d.deductions.length, 1);
   let bodyRows = '';
@@ -144,7 +147,7 @@ const renderPayslipHtml = (d) => {
       <td class="cell name">${e ? esc(e.name) : ''}</td>
       <td class="cell amt">${e ? fmt(e.amount) : ''}</td>
       <td class="cell name">${x ? esc(x.name) : ''}</td>
-      <td class="cell amt">${x ? fmt(x.amount) : ''}</td>
+      <td class="cell amt">${x ? fmtDed(x.amount) : ''}</td>
     </tr>`;
   }
 
@@ -262,7 +265,7 @@ const renderPayslipHtml = (d) => {
         ${bodyRows}
         <tr class="total">
           <td>Total Addition</td><td class="amt" style="text-align:right">${fmt(d.grossEarnings)}</td>
-          <td>Total Deduction</td><td class="amt" style="text-align:right">${fmt(d.totalDeductions)}</td>
+          <td>Total Deduction</td><td class="amt" style="text-align:right">${fmtDed(d.totalDeductions)}</td>
         </tr>
         <tr class="net">
           <td></td><td></td>

@@ -193,12 +193,22 @@ const generateAttendanceReport = async (companyId, { month, year, employeeId, te
     const regCounts = { raised: empRegs.length, approved: 0, rejected: 0, pending: 0 };
     for (const r of empRegs) { if (r.status === 'approved') regCounts.approved++; else if (r.status === 'rejected') regCounts.rejected++; else if (r.status === 'pending') regCounts.pending++; }
 
+    // Full-month context (not clamped to join/today): total calendar days, and the
+    // employee's scheduled working days per their policy minus public holidays.
+    const monthDays = civilDays.length;
+    let workingDaysCount = 0;
+    for (const civil of civilDays) {
+      if (!workingDays.includes(DAY_NAMES[civil.getUTCDay()])) continue; // non-working weekday
+      if (holidayForEmp(dayKey(civil), emp)) continue;                   // public holiday
+      workingDaysCount++;
+    }
+
     blocks.push({
       emp, tz, days, regs: empRegs, regCounts,
       header: `${emp.employeeId || ''}  ·  ${`${emp.firstName || ''} ${emp.lastName || ''}`.trim()}` +
         `${deptMap.get(String(emp.department_id)) ? '  ·  ' + deptMap.get(String(emp.department_id)) : ''}` +
         `${desigMap.get(String(emp.designation_id)) ? ' · ' + desigMap.get(String(emp.designation_id)) : ''}`,
-      totals: `Totals:   Present ${sum.present}   |   Short ${sum.short}   |   Late ${sum.late}   |   Half ${sum.half_day}   |   Absent ${sum.absent}   |   Leave-Paid ${sum.on_leave}   |   Leave-Unpaid ${sum.on_leave_unpaid}   |   Holiday ${sum.holiday}   |   Week-off ${sum.week_off}   |   Hrs ${Math.round(sum.totalHours * 10) / 10}   |   OT ${Math.round(sum.overtimeHours * 10) / 10}`,
+      totals: `Totals:   Month Days ${monthDays}   |   Working Days ${workingDaysCount}   |   Present ${sum.present}   |   Short ${sum.short}   |   Late ${sum.late}   |   Half ${sum.half_day}   |   Absent ${sum.absent}   |   Leave-Paid ${sum.on_leave}   |   Leave-Unpaid ${sum.on_leave_unpaid}   |   Holiday ${sum.holiday}   |   Week-off ${sum.week_off}   |   Hrs ${Math.round(sum.totalHours * 10) / 10}   |   OT ${Math.round(sum.overtimeHours * 10) / 10}`,
     });
   }
 

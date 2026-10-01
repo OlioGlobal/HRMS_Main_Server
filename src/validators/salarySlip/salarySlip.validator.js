@@ -21,7 +21,7 @@ const sendSlipValidator = [
   body('actualPaid').optional({ nullable: true }).isFloat({ min: 0 }).withMessage('Actual paid must be 0 or more.'),
   body('deductions').optional({ nullable: true }).isArray().withMessage('Deductions must be a list.'),
   body('deductions.*.name').optional().trim().notEmpty().withMessage('Deduction name is required.'),
-  body('deductions.*.amount').optional().isFloat({ gt: 0 }).withMessage('Deduction amount must be greater than 0.'),
+  body('deductions.*.amount').optional().isFloat({ min: 0 }).withMessage('Deduction amount must be 0 or more.'),
   body('to').optional({ nullable: true }).trim().isEmail().withMessage('Recipient must be a valid email.'),
   body('cc').optional({ nullable: true }).isArray().withMessage('CC must be a list.'),
   body('cc.*').optional().trim().isEmail().withMessage('Each CC must be a valid email.'),
