@@ -252,6 +252,7 @@ const renderPayslipHtml = (d) => {
       </div>
 
       <table class="info-table">
+        <tr><td class="k">Employee ID</td><td>${esc(d.employeeId)}</td></tr>
         <tr><td class="k">Name of Employee</td><td>${esc(d.employeeName)}</td></tr>
         <tr><td class="k">Designation</td><td>${esc(d.designation)}</td></tr>
         <tr><td class="k">Department</td><td>${esc(d.department)}</td></tr>

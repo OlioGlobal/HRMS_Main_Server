@@ -151,6 +151,18 @@ const updateEmployeeValidator = [
     .optional({ nullable: true })
     .trim().isEmail().withMessage('Invalid email address.'),
 
+  body('noticePeriodDays')
+    .optional({ nullable: true })
+    .customSanitizer((v) => (v === '' ? null : v))
+    .if((v) => v != null)
+    .isInt({ min: 0 }).withMessage('Notice period must be 0 or more days.'),
+
+  body('resignationDate')
+    .optional({ nullable: true })
+    .customSanitizer((v) => (v === '' ? null : v))
+    .if((v) => v != null)
+    .isISO8601().withMessage('Invalid resignation date.'),
+
   ...sharedRules,
   validate,
 ];

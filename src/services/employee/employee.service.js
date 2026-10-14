@@ -325,7 +325,12 @@ const updateEmployee = async (companyId, id, body) => {
     'addresses', 'emergencyContact', 'avatar',
     'joiningDate', 'employmentType', 'department_id', 'team_id',
     'location_id', 'workPolicy_id', 'workMode', 'reportingManager_id', 'designation_id',
+    'noticePeriodDays', 'resignationDate',
   ];
+
+  // Normalise empties to null so Number/Date casts don't choke.
+  if (body.noticePeriodDays === '') body.noticePeriodDays = null;
+  if (body.resignationDate === '')  body.resignationDate = null;
 
   for (const key of allowed) {
     if (body[key] !== undefined) {

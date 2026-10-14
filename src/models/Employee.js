@@ -172,6 +172,7 @@ const employeeSchema = new mongoose.Schema(
     onboardingCompletedAt: { type: Date,    default: null },
 
     // ─── Offboarding ──────────────────────────────────────────────────────────
+    resignationDate:         { type: Date,    default: null }, // when the employee resigned / notice began
     lastWorkingDay:          { type: Date,    default: null },
     knowledgeTransfer:       { type: Boolean, default: false },
     assetsReturned:          { type: Boolean, default: false },
