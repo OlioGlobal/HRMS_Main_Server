@@ -338,6 +338,19 @@ const updateEmployee = async (companyId, id, body) => {
     }
   }
 
+  // Setting a resignation date on an active employee puts them on notice, and the
+  // last working day is derived from the notice period (resignation + notice days).
+  // Notice period is REQUIRED — without it the last working day can't be computed.
+  if (employee.resignationDate && employee.status === 'active') {
+    if (employee.noticePeriodDays == null || isNaN(Number(employee.noticePeriodDays)) || Number(employee.noticePeriodDays) < 0) {
+      throw new AppError('Set the notice period (days) before adding a resignation date — it is needed to calculate the last working day.', 400);
+    }
+    employee.status = 'notice';
+    const lwd = new Date(employee.resignationDate);
+    lwd.setUTCDate(lwd.getUTCDate() + Number(employee.noticePeriodDays));
+    employee.lastWorkingDay = lwd;
+  }
+
   // Allow setting employeeId only if not already assigned
   if (body.employeeId && !employee.employeeId) {
     const conflict = await Employee.findOne({ company_id: companyId, employeeId: body.employeeId, _id: { $ne: id } });
