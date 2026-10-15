@@ -458,6 +458,13 @@ const updateProbation = async (companyId, id, body, reviewerId) => {
     employee.probationEndDate = newEnd;
   }
 
+  // Direct override — HR can edit the probation end date explicitly (wins over the above).
+  if (body.probationEndDate) {
+    const end = new Date(body.probationEndDate);
+    if (isNaN(end.getTime())) throw new AppError('Invalid probation end date.', 400);
+    employee.probationEndDate = end;
+  }
+
   // Auto-fill reviewer
   if (probationStatus && probationStatus !== 'ongoing') {
     employee.probationReviewedBy = reviewerId;
