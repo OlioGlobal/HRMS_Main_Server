@@ -139,7 +139,8 @@ const resolveTimezone = async (employee) => {
 const clockIn = async (companyId, userId, body) => {
   const employee = await Employee.findOne({ user_id: userId, company_id: companyId }).lean();
   if (!employee) throw new AppError('No employee profile linked to your account.', 400);
-  if (employee.status !== 'active') throw new AppError('Your employee profile is not active.', 400);
+  // Employees serving their notice period are still working, so they may clock in.
+  if (!['active', 'notice'].includes(employee.status)) throw new AppError('Your employee profile is not active.', 400);
 
   const tz    = await resolveTimezone(employee);
   const today = dayStartInTZ(tz);
@@ -431,7 +432,7 @@ const listAttendance = async (companyId, query = {}, scope = 'global', userId = 
     },
     { $unwind: '$employee' },
     // Only active employees
-    { $match: { 'employee.status': 'active' } },
+    { $match: { 'employee.status': { $in: ['active', 'notice'] } } },
     ...(scopeMatch ? [{ $match: scopeMatch }] : []),
     ...(department ? [{ $match: { 'employee.department_id': toObjectId(department) } }] : []),
     // Search by employee name or employeeId

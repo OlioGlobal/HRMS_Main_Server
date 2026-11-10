@@ -75,7 +75,7 @@ const run = async () => {
     }
 
     // 3. Get active employees
-    const employees = await Employee.find({ company_id: companyId, status: 'active' }).lean();
+    const employees = await Employee.find({ company_id: companyId, status: { $in: ['active', 'notice'] } }).lean();
     if (!employees.length) continue;
 
     // 4. Resolve each employee's timezone and filter those at 23:00

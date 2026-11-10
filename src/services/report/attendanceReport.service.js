@@ -74,7 +74,7 @@ const generateAttendanceReport = async (companyId, { month, year, employeeId, te
   if (!m || !y || m < 1 || m > 12) throw new AppError('Valid month and year are required.', 400);
 
   // ─── ACTIVE employees only (specific employee/team still honoured) ───────
-  const empFilter = { company_id: companyId, status: 'active' };
+  const empFilter = { company_id: companyId, status: { $in: ['active', 'notice'] } };
   if (employeeId) { delete empFilter.status; empFilter._id = new mongoose.Types.ObjectId(employeeId); }
   else if (teamId) empFilter.team_id = new mongoose.Types.ObjectId(teamId);
 
