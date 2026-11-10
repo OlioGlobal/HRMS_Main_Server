@@ -9,6 +9,7 @@ const Company                        = require('./src/models/Company');
 const { registerNotificationJobs }  = require('./src/services/ruleEngine/registerJobs');
 const { seedDefaultHiringPipeline } = require('./src/seeders/hiringPipeline.seeder');
 const { seedDefaultLetterTemplates } = require('./src/seeders/letterTemplates.seeder');
+const { ensureDefaultRule }          = require('./src/seeders/notificationRules.seeder');
 const { seedPlatformAdmin }         = require('./src/seeders/platformAdmin.seeder');
 const { seedDefaultPlans }          = require('./src/seeders/plans.seeder');
 const { grandfatherTenants }        = require('./src/seeders/grandfatherTenants.seeder');
@@ -30,6 +31,7 @@ const startServer = async () => {
     await seedDefaultRoles(c._id);
     await seedDefaultLetterTemplates(c._id);
     await seedDefaultHiringPipeline(c._id);
+    await ensureDefaultRule(c._id, 'monthly-attendance-review');
   }
   if (companies.length) {
     console.log(`[Seeder] Synced default role-permissions for ${companies.length} company(ies).`);

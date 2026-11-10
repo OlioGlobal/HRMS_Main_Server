@@ -52,6 +52,13 @@ const notificationRuleSchema = new Schema(
       // instead of a separate email per recipient. Used for announcements like birthdays
       // and holidays. Disables per-location send timing for that rule.
       consolidateEmail: { type: Boolean, default: false },
+      // Monthly attendance review: day of the month to send, and who gets it.
+      dayOfMonth: { type: Number, min: 1, max: 28 },
+      audience: { type: String, enum: ['all', 'selected'] },
+      employeeIds: {
+        type: [{ type: Schema.Types.ObjectId, ref: 'Employee' }],
+        validate: [(ids) => ids.length <= 2000, 'Too many employees selected.'],
+      },
     },
     recipients: {
       employee: { type: Boolean, default: false },

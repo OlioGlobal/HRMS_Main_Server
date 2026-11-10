@@ -25,6 +25,7 @@ const CRON_SLUGS = [
   'work-anniversary',
   'holiday-reminder',
   'leave-auto-approve',
+  'monthly-attendance-review',
 ];
 
 /**

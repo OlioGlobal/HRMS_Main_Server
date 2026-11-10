@@ -502,6 +502,26 @@ const DEFAULT_RULES = [
       },
     },
   },
+
+  // 16. Monthly Attendance Review — in-app only, off until an admin enables it
+  {
+    slug: 'monthly-attendance-review',
+    name: 'Monthly Attendance Review',
+    description: 'Once a month, asks selected employees to review last month\'s attendance and contact Vishwas Tupe about any issues.',
+    triggerType: 'cron',
+    cronSchedule: '0 9 1 * *',
+    isEnabled: false,
+    isSystem: true,
+    config: { runTime: '09:00', dayOfMonth: 1, audience: 'all', employeeIds: [] },
+    recipients: { employee: false, manager: false, hr: false },
+    channels: { inApp: true, email: false },
+    templates: {
+      inApp: {
+        title: 'Monthly attendance check',
+        body: 'Please review your attendance for {{monthName}}. If you find missed clock-ins, leaves, half days or late marks that need correcting, contact Vishwas Tupe.',
+      },
+    },
+  },
 ];
 
 /**
@@ -537,4 +557,24 @@ const seedDefaultNotificationRules = async (companyId) => {
   }
 };
 
-module.exports = { seedDefaultNotificationRules, DEFAULT_RULES };
+/**
+ * Add one default rule to a company that already has rules but not this one.
+ * Insert-only: an existing rule (and any edits to it) is never touched. Errors are
+ * logged, not thrown, so a failure here can never stop the server from starting.
+ */
+const ensureDefaultRule = async (companyId, slug) => {
+  try {
+    const rule = DEFAULT_RULES.find((r) => r.slug === slug);
+    const hasRules = await NotificationRule.countDocuments({ company_id: companyId });
+    if (!rule || !hasRules) return;
+    await NotificationRule.updateOne(
+      { company_id: companyId, slug },
+      { $setOnInsert: { company_id: companyId, ...rule } },
+      { upsert: true },
+    );
+  } catch (err) {
+    console.error(`[NotificationRules] Could not add ${slug} for company ${companyId}:`, err.message);
+  }
+};
+
+module.exports = { seedDefaultNotificationRules, ensureDefaultRule, DEFAULT_RULES };

@@ -21,6 +21,7 @@ const registry = {
   'shift-notification':     require('./handlers/shiftNotification'),
   'wfh-notification':            require('./handlers/wfhNotification'),
   'reimbursement-notification':  require('./handlers/reimbursementNotification'),
+  'monthly-attendance-review':   require('./handlers/monthlyAttendanceReview'),
 };
 
 module.exports = registry;
